@@ -10,9 +10,12 @@
 #include<semaphore.h>
 #include<pthread.h>
 
+#define MAX_CLIENTS 10
+
 void filereader(int client_socket){
     char filename[100];
     recv(client_socket, filename, 100, 0);
+    printf("File name received %s",filename);
     FILE *file = fopen(filename, "r");
     if(file == NULL){
         perror("File not found\n");
@@ -27,20 +30,23 @@ void filereader(int client_socket){
 void *client_handler(void *arg){
     int client_socket = *(int*)arg;
     char buffer[1024];
-    
-    recv(client_socket, buffer, 1024, 0);
-    if(strcmp(buffer, "1") == 0){
+    int choice;
+    printf("HI\n");
+    recv(client_socket, &choice, sizeof(choice), 0);
+    if(choice == 1){
         filereader(client_socket);
     }
+    close(client_socket);
+    return NULL;
 }
 
 int main(){
     int server_socket;
     struct sockaddr_in server_address;
     socklen_t server_address_size = sizeof(server_address);
-    int client_socket[10];
-    int i=0;
-    pthread_t thread_id[10];
+    int client_socket[MAX_CLIENTS];
+    int client_count = 0;
+    pthread_t thread_id[MAX_CLIENTS];
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket <= 0){
@@ -49,7 +55,7 @@ int main(){
     }
 
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(8080);
+    server_address.sin_port = htons(8000);
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     if(bind(server_socket, (struct sockaddr*)&server_address, server_address_size) < 0){
@@ -57,27 +63,31 @@ int main(){
         exit(1);
     }
 
-    if(listen(server_socket, 10) < 0){
+    if(listen(server_socket, MAX_CLIENTS) < 0){
         perror("Listening failed");
         exit(1);
     }
 
     printf("Waiting for connections....\n");
 
-    
-    while(i<2){
-        client_socket[i] = accept(server_socket, (struct sockaddr*)&server_address, &server_address_size);
-        if(client_socket[i] <0){
+    while(1){
+        client_socket[client_count] = accept(server_socket, (struct sockaddr*)&server_address, &server_address_size);
+        if(client_socket[client_count] <0){
             perror("Accept failed\n");
             exit(1);
         }
-        printf("Connection established with client %d\n", i+1);
-        pthread_create(&thread_id[i], NULL, client_handler, (void*)&client_socket[i]);
-        i++;
-    }
+        printf("Connection established with client %d\n", client_count+1);
+        pthread_create(&thread_id[client_count], NULL, client_handler, (void*)&client_socket[client_count]);
+        printf("HELLO\n");
+        client_count++;
+        printf("%d\n", client_count);
 
-    for(int j=0; j<2; j++){
-        pthread_join(thread_id[j], NULL);
+        if(client_count == MAX_CLIENTS){
+            for(int j=0; j<MAX_CLIENTS; j++){
+                pthread_join(thread_id[j], NULL);
+            }
+            client_count = 0;
+        }
     }
 
     close(server_socket);
