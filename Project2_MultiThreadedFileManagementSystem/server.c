@@ -12,8 +12,18 @@
 #include<time.h>
 
 #define MAX_CLIENTS 10
+int read_count;
+sem_t read_mutex, write_mutex;
 
 void filereader(int client_socket){
+    sem_wait(&read_mutex);
+    read_count++;
+    if(read)count == 1){
+        sem_wait(&write_mutex);
+    }
+
+    sem_post(&read_mutex);
+
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s",filename);
@@ -27,6 +37,13 @@ void filereader(int client_socket){
         send(client_socket, buffer, 1024, 0);
         printf("%s\n\n\n",buffer);
     }
+    
+    sem_wait(&read_mutex);
+    read_count--;
+    if(read_count == 0){
+        sem_post(&write_mutex);
+    }
+    sem_post(&read_mutex);
 }
 
 void *client_handler(void *arg){
@@ -42,6 +59,22 @@ void *client_handler(void *arg){
     return NULL;
 }
 
+void file_renamer(int client_socket){
+    sem_wait(&write_mutex);
+    char filename[1024];
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received %s",filename);
+    char newname[1024];
+    recv(client_socket, newname, 1024, 0);
+    printf("New name received %s",newname);
+    if(rename(filename, newname) < 0){
+        perror("File renaming failed\n");
+        exit(1);
+    }
+    send(client_socket, "File renamed successfully", 1024, 0);
+    sem_post(&write_mutex);
+}
+
 int main(){
     int server_socket;
     struct sockaddr_in server_address;
@@ -50,6 +83,9 @@ int main(){
     int client_count = 0;
     pthread_t thread_id[MAX_CLIENTS];
     srand(time(0));
+
+    sem_init(&read_mutex, 0, 1);
+    sem_init(&write_mutex, 0, 1);
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket <= 0){

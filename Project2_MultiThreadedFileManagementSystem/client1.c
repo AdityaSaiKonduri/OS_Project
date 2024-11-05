@@ -34,7 +34,7 @@ void send_command1(int command) {
 }
 
 int main() {
-    // sem_init(&mutex, 0, 1);
+    //sem_init(&mutex, 0, 1);
     struct sockaddr_in server_addr;
     client_socket = socket(AF_INET, SOCK_STREAM, 0);
 
