@@ -13,8 +13,8 @@
 #define MAX_CLIENTS 10
 
 void filereader(int client_socket){
-    char filename[100];
-    recv(client_socket, filename, 100, 0);
+    char filename[1024];
+    recv(client_socket, filename, 1024, 0);
     printf("File name received %s",filename);
     FILE *file = fopen(filename, "r");
     if(file == NULL){
