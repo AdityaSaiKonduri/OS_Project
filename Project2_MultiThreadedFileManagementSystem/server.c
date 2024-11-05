@@ -11,6 +11,8 @@
 #include<pthread.h>
 #include<time.h>
 
+#define PORT 8007
+
 #define MAX_CLIENTS 10
 int read_count;
 sem_t read_mutex, write_mutex;
@@ -18,7 +20,7 @@ sem_t read_mutex, write_mutex;
 void filereader(int client_socket){
     sem_wait(&read_mutex);
     read_count++;
-    if(read)count == 1){
+    if(read_count == 1){
         sem_wait(&write_mutex);
     }
 
@@ -46,27 +48,16 @@ void filereader(int client_socket){
     sem_post(&read_mutex);
 }
 
-void *client_handler(void *arg){
-    int client_socket = *(int*)arg;
-    char buffer[1024];
-    int choice;
-    printf("HI\n");
-    recv(client_socket, &choice, sizeof(choice), 0);
-    if(choice == 1){
-        filereader(client_socket);
-    }
-    close(client_socket);
-    return NULL;
-}
-
 void file_renamer(int client_socket){
     sem_wait(&write_mutex);
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s",filename);
+    fflush(stdout);
     char newname[1024];
     recv(client_socket, newname, 1024, 0);
     printf("New name received %s",newname);
+    fflush(stdout);
     if(rename(filename, newname) < 0){
         perror("File renaming failed\n");
         exit(1);
@@ -74,6 +65,26 @@ void file_renamer(int client_socket){
     send(client_socket, "File renamed successfully", 1024, 0);
     sem_post(&write_mutex);
 }
+
+void *client_handler(void *arg){
+    int client_socket = *(int*)arg;
+    char buffer[1024];
+    int choice;
+    printf("HI\n");
+    recv(client_socket, &choice, sizeof(choice), 0);
+    printf("%d",choice);
+    fflush(stdout);
+    if(choice == 1){
+        filereader(client_socket);
+    }
+    if(choice == 4)
+    {
+        file_renamer(client_socket);
+    }
+    close(client_socket);
+    return NULL;
+}
+
 
 int main(){
     int server_socket;
@@ -94,7 +105,7 @@ int main(){
     }
 
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(8004);
+    server_address.sin_port = htons(PORT);
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     if(bind(server_socket, (struct sockaddr*)&server_address, server_address_size) < 0){
@@ -127,6 +138,11 @@ int main(){
             }
             client_count = 0;
         }
+    }
+
+    for(int i=0;i<client_count;i++)
+    {
+        close(client_socket[i]);
     }
 
     close(server_socket);

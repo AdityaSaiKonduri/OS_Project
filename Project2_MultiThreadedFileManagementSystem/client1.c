@@ -6,7 +6,7 @@
 #include <semaphore.h>
 #include <time.h>
 
-#define PORT 8004
+#define PORT 8007
 #define BUFFER_SIZE 1024
 
 int client_socket;
@@ -86,14 +86,20 @@ int main() {
             snprintf(command, sizeof(command), "File_Deletion");
             send_command(command);
             printf("File to delete: ");
-            scanf("%s", command);
-            send_command(command);
+            char command3[100];
+            scanf("%s", command3);
+            send_command(command3);
         } else if (choice == 4) {
-            snprintf(command, sizeof(command), "File_Renaming");
-            send_command(command);
+            command2 = 4;
+            send_command1(command2);
             printf("File to rename: ");
             scanf("%s", command);
             send_command(command);
+            char command3[100];
+            printf("New file name :");
+            scanf("%s",command3);
+            send_command(command3);
+            receive_messages();
         } else if (choice == 5) {
             snprintf(command, sizeof(command), "File_copying");
             send_command(command);
