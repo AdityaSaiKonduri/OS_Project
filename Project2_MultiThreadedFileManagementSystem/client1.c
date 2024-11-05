@@ -7,7 +7,7 @@
 #include <time.h>
 
 #define PORT 8007
-#define BUFFER_SIZE 1024
+#define BUFFER_SIZE 4096
 
 int client_socket;
 sem_t mutex;
@@ -107,11 +107,12 @@ int main() {
             scanf("%s", command);
             send_command(command);
         } else if (choice == 6) {
-            snprintf(command, sizeof(command), "File_meta_data");
-            send_command(command);
+            command2 = 6;
+            send_command1(command2);
             printf("File to get meta data: ");
             scanf("%s", command);
             send_command(command);
+            receive_messages();
         } else if (choice == 7) {
             snprintf(command, sizeof(command), "Error_Handling");
             send_command(command);

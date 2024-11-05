@@ -10,6 +10,7 @@
 #include<semaphore.h>
 #include<pthread.h>
 #include<time.h>
+#include<sys/stat.h>
 
 #define PORT 8007
 
@@ -66,6 +67,58 @@ void file_renamer(int client_socket){
     sem_post(&write_mutex);
 }
 
+void metadata_display(int client_socket) {
+    sem_wait(&read_mutex);
+    read_count++;
+    if(read_count == 1){
+        sem_wait(&write_mutex);
+    }
+
+    sem_post(&read_mutex);
+
+    char filename[1024];
+    struct stat file_stat;
+
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received for metadata display: %s\n", filename);
+
+    if (stat(filename, &file_stat) == -1) {
+        perror("Error getting file metadata");
+        send(client_socket, "Error: File not found or unable to access metadata.\n", 1024, 0);
+        return;
+    }
+
+    char metadata[4096]; 
+    snprintf(metadata, sizeof(metadata), 
+             "File Size: %lld bytes\n"
+             "Permissions: %c%c%c%c%c%c%c%c%c\n"
+             "Last Access Time: %s"
+             "Last Modification Time: %s"
+             "Last Status Change Time: %s",
+             (long long)file_stat.st_size,
+             (file_stat.st_mode & S_IRUSR) ? 'r' : '-',
+             (file_stat.st_mode & S_IWUSR) ? 'w' : '-',
+             (file_stat.st_mode & S_IXUSR) ? 'x' : '-',
+             (file_stat.st_mode & S_IRGRP) ? 'r' : '-',
+             (file_stat.st_mode & S_IWGRP) ? 'w' : '-',
+             (file_stat.st_mode & S_IXGRP) ? 'x' : '-',
+             (file_stat.st_mode & S_IROTH) ? 'r' : '-',
+             (file_stat.st_mode & S_IWOTH) ? 'w' : '-',
+             (file_stat.st_mode & S_IXOTH) ? 'x' : '-',
+             ctime(&file_stat.st_atime),
+             ctime(&file_stat.st_mtime),
+             ctime(&file_stat.st_ctime));
+
+    send(client_socket, metadata, sizeof(metadata), 0);
+    
+    sem_wait(&read_mutex);
+    read_count--;
+    if(read_count == 0){
+        sem_post(&write_mutex);
+    }
+    sem_post(&read_mutex);
+}
+
 void *client_handler(void *arg){
     int client_socket = *(int*)arg;
     char buffer[1024];
@@ -80,6 +133,10 @@ void *client_handler(void *arg){
     if(choice == 4)
     {
         file_renamer(client_socket);
+    }
+    if(choice == 6)
+    {
+        metadata_display(client_socket);
     }
     close(client_socket);
     return NULL;
