@@ -9,6 +9,7 @@
 #include<sys/wait.h>
 #include<semaphore.h>
 #include<pthread.h>
+#include<time.h>
 
 #define MAX_CLIENTS 10
 
@@ -24,6 +25,7 @@ void filereader(int client_socket){
     char buffer[1024];
     while(fgets(buffer, 1024, file)){
         send(client_socket, buffer, 1024, 0);
+        printf("%s\n\n\n",buffer);
     }
 }
 
@@ -47,6 +49,7 @@ int main(){
     int client_socket[MAX_CLIENTS];
     int client_count = 0;
     pthread_t thread_id[MAX_CLIENTS];
+    srand(time(0));
 
     server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if(server_socket <= 0){
@@ -55,7 +58,7 @@ int main(){
     }
 
     server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(8000);
+    server_address.sin_port = htons(8004);
     server_address.sin_addr.s_addr = INADDR_ANY;
 
     if(bind(server_socket, (struct sockaddr*)&server_address, server_address_size) < 0){
