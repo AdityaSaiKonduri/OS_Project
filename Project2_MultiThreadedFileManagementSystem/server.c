@@ -11,12 +11,157 @@
 #include<pthread.h>
 #include<time.h>
 #include<sys/stat.h>
+#include<zlib.h>
 
 #define PORT 8010
-
 #define MAX_CLIENTS 10
+#define CHUNK 16384
+
+char *null_string = "";
+
 int read_count;
 sem_t read_mutex, write_mutex;
+
+void file_decompression(int client_socket){
+    char filename[1024];
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received %s\n",filename);  
+
+    char dempress_filename[1024];
+    strcat(decompress_filename, filename);
+    strcat(decompress_filename, "_decompressed");
+
+    FILE *file = fopen(filename, "rb");
+    FILE *decompressed_file = fopen(decompress_filename, "wb");
+
+    if(file == NULL || decompressed_file == NULL){
+        perror("File not found\n");
+        exit(1);
+    }
+
+    z_stream strm = {0};
+    if(inflateInit(&strm) != Z_OK){
+        perror("Decompression failed - Inflate Init Error\n");
+        exit(1);
+    }
+
+    unsigned char in[CHUNK];
+    unsigned char out[CHUNK];
+
+    do {
+        strm.avail_in = fread(in, 1, CHUNK, file);
+        if(ferror(file)){
+            inflateEnd(&strm);
+            perror("Decompression failed - File read error\n");
+            exit(1);
+        }
+        if(strm.avail_in == 0){
+            break;
+        }
+        strm.next_in = in;
+
+        do {
+            strm.avail_out = CHUNK;
+            strm.next_out = out;
+            inflate(&strm, Z_NO_FLUSH);
+            size_t have = CHUNK - strm.avail_out;
+            fwrite(out, 1, have, decompressed_file);
+            if (ferror(decompressed_file)){
+                inflateEnd(&strm);
+                perror("Decompression failed - File write error\n");
+                exit(1);
+            }
+        } while(strm.avail_out == 0);
+    } while(feof(file) == 0);
+
+    inflateEnd(&strm);
+    fclose(file);
+    fclose(decompressed_file);
+    printf("File decompressed successfully\n");
+
+}
+
+void file_compression(int client_socket){
+    char filename[1024];
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received %s\n",filename);
+
+    char compress_filename[1024];
+    strcat(compress_filename, filename);
+    strcat(compress_filename, "_compressed");
+
+    FILE *file = fopen(filename, "rb");
+    FILE *compressed_file = fopen(compress_filename, "wb");
+    if(file == NULL || compressed_file == NULL){
+        perror("File not found\n");
+        exit(1);
+    }
+
+    z_stream strm = {0};
+    if(deflateInit(&strm, Z_BEST_COMPRESSION) != Z_OK){
+        perror("Compression failed - Deflate Init Error\n");
+        exit(1);
+    }
+
+    unsigned char in[CHUNK];
+    unsigned char out[CHUNK];
+    int flush;
+
+    do {
+        strm.avail_in = fread(in, 1, CHUNK, file);
+        if(ferror(file)){
+            deflatedEnd(&strm);
+            perror("Compression failed - File read error\n");
+            exit(1);
+        }
+        flush = feof(file) ? Z_FINISH : Z_NO_FLUSH;
+        strm.next_in = in;
+
+        do {
+            strm.avail_out = CHUNK;
+            strm.next_out = out;
+            deflate(&strm, flush);
+            size_t have = CHUNK - strm.avail_out;
+            fwrite(out, 1, have, compressed_file);
+            if(ferror(compressed_file)){
+                deflateEnd(&strm);
+                perror("Compression failed - File write error\n");
+                exit(1);
+            }
+        } while(strm.avail_out == 0);
+    } while(flush != Z_FINISH);
+
+    deflateEnd(&strm);
+    fclose(file);
+    fclose(compressed_file);
+    printf("File compressed successfully\n");
+}
+
+void operation_logging(int client_socket, int operation, char *filename_accessed, char *newname, char *log_message){
+    FILE *log_file = fopen("log.txt", "a");
+    if(file==NULL){
+        perror("Log file not found\n");
+        exit(1);
+    }
+    time_t current_time;
+    struct tm * time_info;
+    time(&current_time);
+    time_info = localtime(&current_time);
+
+    if(operation == 1){
+        fprintf(log_file, "File %s read at %s by %d STATUS : %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
+    }
+    if(operation == 4){
+        fprintf(log_file, "File %s renamed to %s at %s by %d STATUS : %s\n", filename_accessed, newname, asctime(time_info), client_socket, log_message);
+    }
+    if(operation == 5){
+        fprintf(log_file, "File %s copied at %s by %d\n", filename_accessed, asctime(time_info), client_socket);
+    }
+    if(operation == 6){
+        fprintf(log_file, "Metadata of file %s accessed at %s by %d\n", filename_accessed, asctime(time_info), client_socket);
+    }
+    fclose(log_file);
+}
 
 void filereader(int client_socket){
     sem_wait(&read_mutex);
@@ -33,12 +178,14 @@ void filereader(int client_socket){
     FILE *file = fopen(filename, "r");
     if(file == NULL){
         perror("File not found\n");
+        operation_logging(client_socket, 1, filename, null_string, "File read failed");
         exit(1);
     }
     char buffer[1024];
     while(fgets(buffer, 1024, file)){
         send(client_socket, buffer, 1024, 0);
     }
+    operation_logging(client_socket, 1, filename, null_string, "File read successfully");
     
     sem_wait(&read_mutex);
     read_count--;
@@ -55,14 +202,17 @@ void file_renamer(int client_socket){
     printf("File name received %s",filename);
     fflush(stdout);
     char newname[1024];
-    recv(client_socket, newname, 1024, 0);
+    recv(client_socket, newname, 1024, 0);  
+
     printf("New name received %s",newname);
     fflush(stdout);
     if(rename(filename, newname) < 0){
         perror("File renaming failed\n");
+        output_logging(client_socket, 4, filename, newname, "File renaming failed");
         exit(1);
     }
     send(client_socket, "File renamed successfully", 1024, 0);
+    output_logging(client_socket, 4, filename, newname, "File renamed successfully");
     sem_post(&write_mutex);
 }
 
@@ -84,6 +234,7 @@ void metadata_display(int client_socket) {
     if (stat(filename, &file_stat) == -1) {
         perror("Error getting file metadata");
         send(client_socket, "Error: File not found or unable to access metadata.\n", 1024, 0);
+        output_logging(client_socket, 6, filename, null_string, "File metadata access failed");
         return;
     }
 
@@ -109,6 +260,7 @@ void metadata_display(int client_socket) {
              ctime(&file_stat.st_ctime));
 
     send(client_socket, metadata, sizeof(metadata), 0);
+    output_logging(client_socket, 6, filename, null_string, "File metadata accessed successfully");
     
     sem_wait(&read_mutex);
     read_count--;
@@ -116,6 +268,38 @@ void metadata_display(int client_socket) {
         sem_post(&write_mutex);
     }
     sem_post(&read_mutex);
+}
+
+void file_copy(int client){
+    sem_wait(&read_mutex);
+    read_count++;
+    if(read_count == 1){
+        sem_wait(&write_mutex);
+    }
+
+    sem_post(&read_mutex);
+
+    char filename[1024];
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received %s",filename);
+    FILE *file = fopen(filename, "r");
+    if(file == NULL){
+        perror("File not found\n");
+        output_logging(client_socket, 5, filename, null_string, "File copy failed");
+        exit(1);
+    }
+    char buffer[1024];
+    while(fgets(buffer, 1024, file)){
+        send(client_socket, buffer, 1024, 0);
+    }
+    output_logging(client_socket, 5, filename, null_string, "File copied successfully");
+    sem_wait(&read_mutex);
+    read_count--;
+    if(read_count == 0){
+        sem_post(&write_mutex);
+    }
+    sem_post(&read_mutex);
+
 }
 
 void *client_handler(void *arg){
@@ -135,14 +319,25 @@ void *client_handler(void *arg){
         fflush(stdout);
         if(choice == 1){
             filereader(client_socket);
+
         }
         if(choice == 4)
         {
             file_renamer(client_socket);
         }
+        if(choice == 5)
+        {
+            file_copy(client_socket);
+        }
         if(choice == 6)
         {
             metadata_display(client_socket);
+        }
+        if(choice == 8){
+            file_compression(client_socket);
+        }
+        if(choice == 9){
+            file_decompression(client_socket);
         }
         if(choice == 10)
         {

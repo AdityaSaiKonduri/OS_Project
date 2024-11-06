@@ -26,6 +26,31 @@ void receive_messages() {
     printf("\nEOF");
 }
 
+void receive_messages_for_copy(char *filename) {
+    char buffer[BUFFER_SIZE];
+    while (1) {
+        memset(buffer, 0, BUFFER_SIZE);
+        int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
+        if (bytes_received <= 0) {
+            break;
+        }
+        if(FILE *file = fopen(filename, "a") <0){
+            perror("File not found\n");
+            exit(1);
+        }
+        fprintf(file, "%s", buffer);
+
+    }
+    printf("\nEOF");
+}
+
+void file_copy_client(){
+    char copy_filename[BUFFER_SIZE];
+    printf("Enter the name of the file to copy into: ");
+    scanf("%s", copy_filename);
+    receive_messages_for_copy(copy_filename);
+}
+
 void send_command(const char *command) {
     send(client_socket, command, strlen(command), 0);
 }
@@ -108,11 +133,13 @@ int main() {
             send_command(command3);
             receive_messages();
         } else if (choice == 5) {
-            snprintf(command, sizeof(command), "File_copying");
-            send_command(command);
+            command2 = 5;
+            send_command1(command2);
             printf("File to copy: ");
             scanf("%s", command);
             send_command(command);
+            file_copy_client();
+
         } else if (choice == 6) {
             command2 = 6;
             send_command1(command2);
