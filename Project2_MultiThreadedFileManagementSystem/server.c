@@ -151,14 +151,21 @@ void operation_logging(int client_socket, int operation, char *filename_accessed
     if(operation == 1){
         fprintf(log_file, "File %s read at %s by %d STATUS : %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
     }
+    if(operation == 2){
+        fprintf(log_file, "File %s written at %s by %d STATUS : %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
+    }
+    if(operation == 3)
+    {
+        fprintf(log_file, "File %s deleted at %s by %d STATUS : %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
+    }
     if(operation == 4){
         fprintf(log_file, "File %s renamed to %s at %s by %d STATUS : %s\n", filename_accessed, newname, asctime(time_info), client_socket, log_message);
     }
     if(operation == 5){
-        fprintf(log_file, "File %s copied at %s by %d\n", filename_accessed, asctime(time_info), client_socket);
+        fprintf(log_file, "File %s copied at %s by %d STATUS : %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
     }
     if(operation == 6){
-        fprintf(log_file, "Metadata of file %s accessed at %s by %d\n", filename_accessed, asctime(time_info), client_socket);
+        fprintf(log_file, "Metadata of file %s accessed at %s by %d STATUS %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
     }
     fclose(log_file);
 }
@@ -195,28 +202,50 @@ void filereader(int client_socket){
     sem_post(&read_mutex);
 }
 
-void filewriter(int client_socket){
+void filewriter(int client_socket) {
+
     sem_wait(&write_mutex);
     char filename[1024];
+    memset(filename, 0, sizeof(filename));
     recv(client_socket, filename, 1024, 0);
-    printf("File name received %s\n",filename);
+    printf("File name received %s\n", filename);
     fflush(stdout);
-    FILE *file = fopen(filename, "w");
-    if(file == NULL){
+
+    struct timeval timeout;
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
+
+    FILE *file = fopen(filename, "a");
+    if (file == NULL) {
         perror("File not found\n");
         exit(1);
     }
-    char buffer[1024];
-    while(recv(client_socket, buffer, 1024, 0) > 0){
-        fprintf(file, "%s", buffer);
 
+    char buffer[1024];
+    while (1) {
+        memset(buffer, 0, sizeof(buffer));
+        int bytes_received = recv(client_socket, buffer, 1024, 0);
+
+        if (bytes_received <= 0) {
+            break;
+        }
+
+        printf("%s", buffer);
+        fflush(stdout);
+        
+        fprintf(file, "%s", buffer);
     }
+
     send(client_socket, "File written successfully", 1024, 0);
-    operation_logging(client_socket, 2, filename, null_string, "File write successful");
+
+    operation_logging(client_socket, 2, filename, "null_string", "File write successful");
+
     fclose(file);
     sem_post(&write_mutex);
-    
 }
+
 
 void file_deletion(int client_socket){
     sem_wait(&write_mutex);
@@ -268,6 +297,7 @@ void metadata_display(int client_socket) {
 
     char filename[1024];
     struct stat file_stat;
+    memset(filename, 0, sizeof(filename));
 
     recv(client_socket, filename, 1024, 0);
     printf("File name received for metadata display: %s\n", filename);
@@ -361,6 +391,14 @@ void *client_handler(void *arg){
         if(choice == 1){
             filereader(client_socket);
 
+        }
+        if(choice == 2)
+        {
+            filewriter(client_socket);
+        }
+        if(choice == 3)
+        {
+            file_deletion(client_socket);
         }
         if(choice == 4)
         {

@@ -1,0 +1,70 @@
+File vk.txt read at Wed Nov  6 16:46:44 2024
+ by 4 STATUS : File read successfully
+File vk.txt copied at Wed Nov  6 16:49:42 2024
+ by 4
+File vk.txt copied at Wed Nov  6 16:53:53 2024
+ by 4
+File vk.txt copied at Wed Nov  6 16:56:33 2024
+ by 4
+File vk2.txt renamed to vk3.txt at Wed Nov  6 16:58:43 2024
+ by 4 STATUS : File renamed successfully
+Metadata of file file3.txt accessed at Wed Nov  6 16:59:45 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk.txttxt accessed at Wed Nov  6 17:00:03 2024
+ by 4 STATUS File metadata access failed
+Metadata of file vk.txttxt accessed at Wed Nov  6 17:00:19 2024
+ by 4 STATUS File metadata access failed
+Metadata of file file3.txt accessed at Wed Nov  6 17:00:30 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk3.txtxt accessed at Wed Nov  6 17:00:48 2024
+ by 4 STATUS File metadata access failed
+Metadata of file iiitdm.txt accessed at Wed Nov  6 17:01:23 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk.txt.txt accessed at Wed Nov  6 17:01:27 2024
+ by 4 STATUS File metadata access failed
+Metadata of file log.txttxt accessed at Wed Nov  6 17:01:44 2024
+ by 4 STATUS File metadata access failed
+Metadata of file file3.txtt accessed at Wed Nov  6 17:02:52 2024
+ by 4 STATUS File metadata access failed
+Metadata of file file3.txtt accessed at Wed Nov  6 17:04:05 2024
+ by 4 STATUS File metadata access failed
+Metadata of file file3.txt accessed at Wed Nov  6 17:04:21 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file file3.txt accessed at Wed Nov  6 17:04:28 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk.txttxt accessed at Wed Nov  6 17:04:34 2024
+ by 4 STATUS File metadata access failed
+Metadata of file vk3.txtxt accessed at Wed Nov  6 17:04:45 2024
+ by 4 STATUS File metadata access failed
+Metadata of file  accessed at Wed Nov  6 17:05:31 2024
+ by 4 STATUS File metadata access failed
+Metadata of file vk.txt accessed at Wed Nov  6 17:05:46 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk.txt accessed at Wed Nov  6 17:05:53 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file file3.txt accessed at Wed Nov  6 17:06:05 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file file3.txt accessed at Wed Nov  6 17:06:14 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk.txttxt accessed at Wed Nov  6 17:06:21 2024
+ by 4 STATUS File metadata access failed
+Metadata of file  accessed at Wed Nov  6 17:08:26 2024
+ by 4 STATUS File metadata access failed
+Metadata of file file3.txt accessed at Wed Nov  6 17:08:42 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file file3.txt accessed at Wed Nov  6 17:08:47 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file file3.txt accessed at Wed Nov  6 17:08:53 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file file3.txt accessed at Wed Nov  6 17:09:00 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk.txt accessed at Wed Nov  6 17:09:05 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file vk3.txt accessed at Wed Nov  6 17:09:12 2024
+ by 4 STATUS File metadata accessed successfully
+Metadata of file  accessed at Wed Nov  6 17:09:50 2024
+ by 4 STATUS File metadata access failed
+File vk3.txt read at Wed Nov  6 17:28:53 2024
+ by 4 STATUS : File read successfully
+File vk3.txt renamed to  at Wed Nov  6 17:31:29 2024
+ by 4 STATUS : File deleted successfully

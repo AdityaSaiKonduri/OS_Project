@@ -28,19 +28,22 @@ void receive_messages() {
 
 void receive_messages_for_copy(char *filename) {
     char buffer[BUFFER_SIZE];
+    FILE *file =fopen(filename, "a");
     while (1) {
         memset(buffer, 0, BUFFER_SIZE);
         int bytes_received = recv(client_socket, buffer, BUFFER_SIZE, 0);
         if (bytes_received <= 0) {
             break;
         }
-        if(FILE *file = fopen(filename, "a") <0){
+        if(file<0){
             perror("File not found\n");
             exit(1);
         }
+        printf("%s",buffer);
         fprintf(file, "%s", buffer);
 
     }
+    fclose(file);
     printf("\nEOF");
 }
 
@@ -75,7 +78,7 @@ int main() {
     printf("Connected to the server.\n");
 
     struct timeval timeout;
-    timeout.tv_sec = 1;
+    timeout.tv_sec = 7;
     timeout.tv_usec = 0;
     setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
@@ -109,18 +112,32 @@ int main() {
             send_command(command);
             receive_messages();
         } else if (choice == 2) {
-            snprintf(command, sizeof(command), "File_Writing");
-            send_command(command);
-            printf("File to write on : ");
+            command2 = 2;
+            send_command1(command2);
+            printf("File to write : ");
             scanf("%s", command);
             send_command(command);
-        } else if (choice == 3) {
-            snprintf(command, sizeof(command), "File_Deletion");
+            printf("Text to write");
+            // fgets(command,BUFFER_SIZE,stdin);
+            // command[strcspn(command, "\n")] = 0;
+            // scanf("%s",command);
+            getchar();
+            // scanf("%[^\n]%*c",command);
+            // Read the text to write with fgets
+            // printf("Text to write: ");
+            fgets(command, BUFFER_SIZE, stdin);
+            command[strcspn(command, "\n")] = 0;
             send_command(command);
-            printf("File to delete: ");
-            char command3[100];
-            scanf("%s", command3);
-            send_command(command3);
+            receive_messages();
+
+        } else if (choice == 3) {
+            command2 = 3;
+            send_command1(command2);
+            printf("File to delete : ");
+            scanf("%s", command);
+            send_command(command);
+            ;
+            receive_messages();
         } else if (choice == 4) {
             command2 = 4;
             send_command1(command2);
@@ -145,19 +162,20 @@ int main() {
             send_command1(command2);
             printf("File to get meta data: ");
             scanf("%s", command);
+            printf("Requesting meta data for %s",command);
             send_command(command);
             receive_messages();
         } else if (choice == 7) {
             snprintf(command, sizeof(command), "Error_Handling");
             send_command(command);
-        } else if (choice == 8) {
+        } else if (choice == 11) {
             snprintf(command, sizeof(command), "Logging_Operation");
             send_command(command);
             printf("File to log: ");
             scanf("%s", command);
             send_command(command);
         } 
-        else if (choice == 9) {
+        else if (choice == 8) {
             snprintf(command, sizeof(command), "Compress_file");
             send_command(command);
             printf("File to compress: ");
