@@ -12,7 +12,7 @@
 #include<time.h>
 #include<sys/stat.h>
 
-#define PORT 8007
+#define PORT 8010
 
 #define MAX_CLIENTS 10
 int read_count;
@@ -38,7 +38,6 @@ void filereader(int client_socket){
     char buffer[1024];
     while(fgets(buffer, 1024, file)){
         send(client_socket, buffer, 1024, 0);
-        printf("%s\n\n\n",buffer);
     }
     
     sem_wait(&read_mutex);
@@ -124,20 +123,33 @@ void *client_handler(void *arg){
     char buffer[1024];
     int choice;
     printf("HI\n");
-    recv(client_socket, &choice, sizeof(choice), 0);
-    printf("%d",choice);
-    fflush(stdout);
-    if(choice == 1){
-        filereader(client_socket);
-    }
-    if(choice == 4)
+    while (1)
     {
-        file_renamer(client_socket);
+        printf("Waiting for command from client\n");
+        int received = recv(client_socket, &choice, sizeof(choice), 0);
+        if(received < 0)
+        {
+            break;
+        }
+        printf("%d",choice);
+        fflush(stdout);
+        if(choice == 1){
+            filereader(client_socket);
+        }
+        if(choice == 4)
+        {
+            file_renamer(client_socket);
+        }
+        if(choice == 6)
+        {
+            metadata_display(client_socket);
+        }
+        if(choice == 10)
+        {
+            break;
+        }
     }
-    if(choice == 6)
-    {
-        metadata_display(client_socket);
-    }
+    
     close(client_socket);
     return NULL;
 }

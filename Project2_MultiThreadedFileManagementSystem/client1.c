@@ -6,7 +6,7 @@
 #include <semaphore.h>
 #include <time.h>
 
-#define PORT 8007
+#define PORT 8010
 #define BUFFER_SIZE 4096
 
 int client_socket;
@@ -21,8 +21,9 @@ void receive_messages() {
             break;
         }
         printf("%s", buffer);
-        fflush(stdout); // Ensures immediate display of received messages
+        fflush(stdout);
     }
+    printf("\nEOF");
 }
 
 void send_command(const char *command) {
@@ -48,6 +49,11 @@ int main() {
     }
     printf("Connected to the server.\n");
 
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+
     srand(time(0));
 
     while (1) {
@@ -64,6 +70,7 @@ int main() {
 
         int choice;
         scanf("%d", &choice);
+        getchar(); 
 
         char command[BUFFER_SIZE];
         memset(command, 0, BUFFER_SIZE);
@@ -122,13 +129,21 @@ int main() {
             printf("File to log: ");
             scanf("%s", command);
             send_command(command);
-        } else if (choice == 9) {
+        } 
+        else if (choice == 9) {
             snprintf(command, sizeof(command), "Compress_file");
             send_command(command);
             printf("File to compress: ");
             scanf("%s", command);
             send_command(command);
-        } else {
+        }
+        else if (choice == 10)
+        {
+            command2 = 10;
+            send_command1(command2);
+            break;
+        }
+         else {
             printf("Invalid option.\n");
             continue;
         }
