@@ -195,6 +195,47 @@ void filereader(int client_socket){
     sem_post(&read_mutex);
 }
 
+void filewriter(int client_socket){
+    sem_wait(&write_mutex);
+    char filename[1024];
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received %s\n",filename);
+    fflush(stdout);
+    FILE *file = fopen(filename, "w");
+    if(file == NULL){
+        perror("File not found\n");
+        exit(1);
+    }
+    char buffer[1024];
+    while(recv(client_socket, buffer, 1024, 0) > 0){
+        fprintf(file, "%s", buffer);
+
+    }
+    send(client_socket, "File written successfully", 1024, 0);
+    operation_logging(client_socket, 2, filename, null_string, "File write successful");
+    fclose(file);
+    sem_post(&write_mutex);
+    
+}
+
+void file_deletion(int client_socket){
+    sem_wait(&write_mutex);
+    char filename[1024];
+    recv(client_socket,filename,1024,0);
+    printf("File name received %s\n",filename);
+    fflush(stdout);
+
+    if(remove(filename)<0){
+        perror("File deletion failed\n");
+        operation_logging(client_socket,3,filename,null_string,"File Deletion Failed");
+        exit(1);
+    }
+    send(client_socket, "File deleted successfully\n",1024,0);
+    operation_logging(client_socket, 4, filename, null_string, "File deleted successfully");
+
+    sem_post(&write_mutex);
+}
+
 void file_renamer(int client_socket){
     sem_wait(&write_mutex);
     char filename[1024];
