@@ -27,7 +27,7 @@ void file_decompression(int client_socket){
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s\n",filename);  
 
-    char dempress_filename[1024];
+    char decompress_filename[1024];
     strcat(decompress_filename, filename);
     strcat(decompress_filename, "_decompressed");
 
@@ -110,7 +110,7 @@ void file_compression(int client_socket){
     do {
         strm.avail_in = fread(in, 1, CHUNK, file);
         if(ferror(file)){
-            deflatedEnd(&strm);
+            deflateEnd(&strm);
             perror("Compression failed - File read error\n");
             exit(1);
         }
@@ -139,7 +139,7 @@ void file_compression(int client_socket){
 
 void operation_logging(int client_socket, int operation, char *filename_accessed, char *newname, char *log_message){
     FILE *log_file = fopen("log.txt", "a");
-    if(file==NULL){
+    if(log_file==NULL){
         perror("Log file not found\n");
         exit(1);
     }
@@ -208,11 +208,11 @@ void file_renamer(int client_socket){
     fflush(stdout);
     if(rename(filename, newname) < 0){
         perror("File renaming failed\n");
-        output_logging(client_socket, 4, filename, newname, "File renaming failed");
+        operation_logging(client_socket, 4, filename, newname, "File renaming failed");
         exit(1);
     }
     send(client_socket, "File renamed successfully", 1024, 0);
-    output_logging(client_socket, 4, filename, newname, "File renamed successfully");
+    operation_logging(client_socket, 4, filename, newname, "File renamed successfully");
     sem_post(&write_mutex);
 }
 
@@ -234,7 +234,7 @@ void metadata_display(int client_socket) {
     if (stat(filename, &file_stat) == -1) {
         perror("Error getting file metadata");
         send(client_socket, "Error: File not found or unable to access metadata.\n", 1024, 0);
-        output_logging(client_socket, 6, filename, null_string, "File metadata access failed");
+        operation_logging(client_socket, 6, filename, null_string, "File metadata access failed");
         return;
     }
 
@@ -260,7 +260,7 @@ void metadata_display(int client_socket) {
              ctime(&file_stat.st_ctime));
 
     send(client_socket, metadata, sizeof(metadata), 0);
-    output_logging(client_socket, 6, filename, null_string, "File metadata accessed successfully");
+    operation_logging(client_socket, 6, filename, null_string, "File metadata accessed successfully");
     
     sem_wait(&read_mutex);
     read_count--;
@@ -270,7 +270,7 @@ void metadata_display(int client_socket) {
     sem_post(&read_mutex);
 }
 
-void file_copy(int client){
+void file_copy(int client_socket){
     sem_wait(&read_mutex);
     read_count++;
     if(read_count == 1){
@@ -285,14 +285,14 @@ void file_copy(int client){
     FILE *file = fopen(filename, "r");
     if(file == NULL){
         perror("File not found\n");
-        output_logging(client_socket, 5, filename, null_string, "File copy failed");
+        operation_logging(client_socket, 5, filename, null_string, "File copy failed");
         exit(1);
     }
     char buffer[1024];
     while(fgets(buffer, 1024, file)){
         send(client_socket, buffer, 1024, 0);
     }
-    output_logging(client_socket, 5, filename, null_string, "File copied successfully");
+    operation_logging(client_socket, 5, filename, null_string, "File copied successfully");
     sem_wait(&read_mutex);
     read_count--;
     if(read_count == 0){
