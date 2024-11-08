@@ -12,129 +12,145 @@
 #include<time.h>
 #include<sys/stat.h>
 #include<zlib.h>
+#include<assert.h>
 
-#define PORT 8010
+#define PORT 8001
 #define MAX_CLIENTS 10
 #define CHUNK 16384
+#define MAX_FILENAME_LEN 1004
+#define MAX_COMPRESSED_FILENAME_LEN (1024 - 13)
 
 char *null_string = "";
 
 int read_count;
 sem_t read_mutex, write_mutex;
 
-void file_decompression(int client_socket){
-    char filename[1024];
-    recv(client_socket, filename, 1024, 0);
-    printf("File name received %s\n",filename);  
+void file_decompression(int client_socket) {
+    char compressed_filename[1024];
+    recv(client_socket, compressed_filename, sizeof(compressed_filename), 0);
+    printf("Compressed file name received: %s\n", compressed_filename);
 
-    char decompress_filename[1024];
-    strcat(decompress_filename, filename);
-    strcat(decompress_filename, "_decompressed");
-
-    FILE *file = fopen(filename, "rb");
-    FILE *decompressed_file = fopen(decompress_filename, "wb");
-
-    if(file == NULL || decompressed_file == NULL){
-        perror("File not found\n");
-        exit(1);
+    // Open the compressed file for reading
+    FILE *compressed_file = fopen(compressed_filename, "rb");
+    if (!compressed_file) {
+        perror("Could not open compressed file");
+        return;
     }
 
-    z_stream strm = {0};
-    if(inflateInit(&strm) != Z_OK){
-        perror("Decompression failed - Inflate Init Error\n");
-        exit(1);
+    // Get the size of the compressed file
+    fseek(compressed_file, 0, SEEK_END);
+    long compressed_size = ftell(compressed_file);
+    rewind(compressed_file);
+
+    // Allocate memory to read compressed data
+    char *compressed_data = malloc(compressed_size);
+    if (!compressed_data) {
+        perror("Memory allocation failed for compressed data");
+        fclose(compressed_file);
+        return;
     }
 
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
+    // Read the compressed data into memory
+    fread(compressed_data, 1, compressed_size, compressed_file);
+    fclose(compressed_file);
 
-    do {
-        strm.avail_in = fread(in, 1, CHUNK, file);
-        if(ferror(file)){
-            inflateEnd(&strm);
-            perror("Decompression failed - File read error\n");
-            exit(1);
-        }
-        if(strm.avail_in == 0){
-            break;
-        }
-        strm.next_in = in;
+    // Guess the decompressed size
+    uLongf decompressed_size = compressed_size * 4;  // This is an initial guess, may need adjustment
+    char *decompressed_data = malloc(decompressed_size);
+    if (!decompressed_data) {
+        perror("Memory allocation failed for decompressed data");
+        free(compressed_data);
+        return;
+    }
 
-        do {
-            strm.avail_out = CHUNK;
-            strm.next_out = out;
-            inflate(&strm, Z_NO_FLUSH);
-            size_t have = CHUNK - strm.avail_out;
-            fwrite(out, 1, have, decompressed_file);
-            if (ferror(decompressed_file)){
-                inflateEnd(&strm);
-                perror("Decompression failed - File write error\n");
-                exit(1);
-            }
-        } while(strm.avail_out == 0);
-    } while(feof(file) == 0);
+    // Decompress the data
+    int result = uncompress((Bytef *)decompressed_data, &decompressed_size, (const Bytef *)compressed_data, compressed_size);
+    if (result != Z_OK) {
+        fprintf(stderr, "Decompression failed with code %d\n", result);
+        free(compressed_data);
+        free(decompressed_data);
+        return;
+    }
 
-    inflateEnd(&strm);
-    fclose(file);
+    // Construct the decompressed file name
+    char decompressed_filename[1024];
+    snprintf(decompressed_filename, sizeof(decompressed_filename), "decompressed_%.1009s", compressed_filename);
+
+    // Write the decompressed data to the new file
+    FILE *decompressed_file = fopen(decompressed_filename, "wb");
+    if (!decompressed_file) {
+        perror("Could not create decompressed file");
+        free(compressed_data);
+        free(decompressed_data);
+        return;
+    }
+
+    fwrite(decompressed_data, 1, decompressed_size, decompressed_file);
+    printf("File decompressed and saved as: %s\n", decompressed_filename);
+
+    // Clean up
     fclose(decompressed_file);
-    printf("File decompressed successfully\n");
-
+    free(compressed_data);
+    free(decompressed_data);
 }
 
-void file_compression(int client_socket){
-    char filename[1024];
-    recv(client_socket, filename, 1024, 0);
-    printf("File name received %s\n",filename);
 
-    char compress_filename[1024];
-    strcat(compress_filename, filename);
-    strcat(compress_filename, "_compressed");
-
+char *readcontent(const char *filename, int *input_size) {
     FILE *file = fopen(filename, "rb");
-    FILE *compressed_file = fopen(compress_filename, "wb");
-    if(file == NULL || compressed_file == NULL){
-        perror("File not found\n");
+    if (!file) {
+        perror("File not found");
         exit(1);
     }
 
-    z_stream strm = {0};
-    if(deflateInit(&strm, Z_BEST_COMPRESSION) != Z_OK){
-        perror("Compression failed - Deflate Init Error\n");
-        exit(1);
-    }
+    fseek(file, 0, SEEK_END);
+    *input_size = ftell(file);
+    rewind(file);
 
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
-    int flush;
-
-    do {
-        strm.avail_in = fread(in, 1, CHUNK, file);
-        if(ferror(file)){
-            deflateEnd(&strm);
-            perror("Compression failed - File read error\n");
-            exit(1);
-        }
-        flush = feof(file) ? Z_FINISH : Z_NO_FLUSH;
-        strm.next_in = in;
-
-        do {
-            strm.avail_out = CHUNK;
-            strm.next_out = out;
-            deflate(&strm, flush);
-            size_t have = CHUNK - strm.avail_out;
-            fwrite(out, 1, have, compressed_file);
-            if(ferror(compressed_file)){
-                deflateEnd(&strm);
-                perror("Compression failed - File write error\n");
-                exit(1);
-            }
-        } while(strm.avail_out == 0);
-    } while(flush != Z_FINISH);
-
-    deflateEnd(&strm);
+    char *content = malloc(*input_size);
+    fread(content, 1, *input_size, file);
     fclose(file);
+
+    return content;
+}
+
+void file_compression(int client_socket) {
+    char filename[1024] = {0};
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received: %s\n", filename);
+
+    int input_size;
+    char *content_of_file = readcontent(filename, &input_size);
+
+    uLongf compressed_data_size = compressBound(input_size);
+    char *compressed_data = malloc(compressed_data_size);
+    int result = compress((Bytef *)compressed_data, &compressed_data_size, (const Bytef *)content_of_file, input_size);
+
+    if (result != Z_OK) {
+        fprintf(stderr, "Compression failed with code %d\n", result);
+        free(content_of_file);
+        free(compressed_data);
+        return;
+    }
+
+    // Creating a compressed filename with a .gz extension
+    char compress_filename[1024];
+    snprintf(compress_filename, sizeof(compress_filename), "compressed_%.1004s", filename);
+
+    // Writing the compressed data to a .gz file
+    FILE *compressed_file = fopen(compress_filename, "wb");
+    if (!compressed_file) {
+        perror("Could not create compressed file");
+        free(content_of_file);
+        free(compressed_data);
+        return;
+    }
+
+    fwrite(compressed_data, 1, compressed_data_size, compressed_file);
+    printf("File compressed and saved as: %s\n", compress_filename);
+
     fclose(compressed_file);
-    printf("File compressed successfully\n");
+    free(content_of_file);
+    free(compressed_data);
 }
 
 void operation_logging(int client_socket, int operation, char *filename_accessed, char *newname, char *log_message){
@@ -413,6 +429,7 @@ void *client_handler(void *arg){
             metadata_display(client_socket);
         }
         if(choice == 8){
+            printf("HELLO choice 8");
             file_compression(client_socket);
         }
         if(choice == 9){

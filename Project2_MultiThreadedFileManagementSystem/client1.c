@@ -6,7 +6,7 @@
 #include <semaphore.h>
 #include <time.h>
 
-#define PORT 8010
+#define PORT 8001
 #define BUFFER_SIZE 4096
 
 int client_socket;
@@ -176,9 +176,16 @@ int main() {
             send_command(command);
         } 
         else if (choice == 8) {
-            snprintf(command, sizeof(command), "Compress_file");
-            send_command(command);
+            command2 = 8;
+            send_command1(command2);
             printf("File to compress: ");
+            scanf("%s", command);
+            send_command(command);
+        }
+        else if (choice == 9) {
+            command2 = 9;
+            send_command1(command2);
+            printf("File to decompress: ");
             scanf("%s", command);
             send_command(command);
         }
