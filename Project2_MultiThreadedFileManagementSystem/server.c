@@ -12,6 +12,7 @@
 #include<time.h>
 #include<sys/stat.h>
 #include<zlib.h>
+#include <glib.h>
 #include<assert.h>
 
 #define PORT 8001
@@ -19,6 +20,52 @@
 #define CHUNK 16384
 #define MAX_FILENAME_LEN 1004
 #define MAX_COMPRESSED_FILENAME_LEN (1024 - 13)
+
+typedef struct {
+    sem_t read_semaphore;
+    sem_t write_semaphore;
+    int read_count;
+} FileSemaphore;
+
+GHashTable *semaphore_map;
+pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
+
+void free_semaphore(gpointer data) {
+    FileSemaphore *file_sem = (FileSemaphore *)data;
+    sem_destroy(&file_sem->read_semaphore);
+    sem_destroy(&file_sem->write_semaphore);
+    free(file_sem);
+}
+
+void initialize_semaphore_map() {
+    semaphore_map = g_hash_table_new_full(g_str_hash, g_str_equal, free, free_semaphore);
+}
+
+FileSemaphore *get_file_semaphore(const char *file_name, unsigned int initial_value) {
+    pthread_mutex_lock(&map_lock);
+
+    FileSemaphore *file_semaphore = g_hash_table_lookup(semaphore_map, file_name);
+    if (!file_semaphore) {
+        file_semaphore = malloc(sizeof(FileSemaphore));
+        if (sem_init(&file_semaphore->read_semaphore, 0, initial_value) != 0 ||
+            sem_init(&file_semaphore->write_semaphore, 0, initial_value) != 0) {
+            perror("Semaphore initialization failed");
+            free(file_semaphore);
+            pthread_mutex_unlock(&map_lock);
+            return NULL;
+        }
+        g_hash_table_insert(semaphore_map, g_strdup(file_name), file_semaphore);
+    }
+
+    pthread_mutex_unlock(&map_lock);
+    return file_semaphore;
+}
+
+void destroy_all_semaphores() {
+    pthread_mutex_lock(&map_lock);
+    g_hash_table_destroy(semaphore_map);
+    pthread_mutex_unlock(&map_lock);
+}
 
 char *null_string = "";
 
@@ -187,207 +234,248 @@ void operation_logging(int client_socket, int operation, char *filename_accessed
 }
 
 void filereader(int client_socket){
-    sem_wait(&read_mutex);
-    read_count++;
-    if(read_count == 1){
-        sem_wait(&write_mutex);
-    }
-
-    sem_post(&read_mutex);
-
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s",filename);
-    FILE *file = fopen(filename, "r");
-    if(file == NULL){
-        perror("File not found\n");
-        operation_logging(client_socket, 1, filename, null_string, "File read failed");
-        exit(1);
+
+    FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
+    if(file_semaphore)
+    {
+        sem_wait(&file_semaphore->read_semaphore);
+        file_semaphore->read_count++;
+        if(file_semaphore->read_count == 1){
+            sem_wait(&file_semaphore->write_semaphore);
+        }
+
+        sem_post(&file_semaphore->read_semaphore);
+
+        FILE *file = fopen(filename, "r");
+        if(file == NULL){
+            perror("File not found\n");
+            operation_logging(client_socket, 1, filename, null_string, "File read failed");
+            exit(1);
+        }
+        char buffer[1024];
+        while(fgets(buffer, 1024, file)){
+            send(client_socket, buffer, 1024, 0);
+        }
+        operation_logging(client_socket, 1, filename, null_string, "File read successfully");
+        
+        sem_wait(&file_semaphore->read_semaphore);
+        file_semaphore->read_count--;
+        if(file_semaphore->read_count == 0){
+            sem_post(&file_semaphore->write_semaphore);
+        }
+        sem_post(&file_semaphore->read_semaphore);
     }
-    char buffer[1024];
-    while(fgets(buffer, 1024, file)){
-        send(client_socket, buffer, 1024, 0);
-    }
-    operation_logging(client_socket, 1, filename, null_string, "File read successfully");
-    
-    sem_wait(&read_mutex);
-    read_count--;
-    if(read_count == 0){
-        sem_post(&write_mutex);
-    }
-    sem_post(&read_mutex);
 }
 
 void filewriter(int client_socket) {
-
-    sem_wait(&write_mutex);
     char filename[1024];
     memset(filename, 0, sizeof(filename));
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s\n", filename);
     fflush(stdout);
+    FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
+    if(file_semaphore)
+    {
+        sem_wait(&file_semaphore->write_semaphore);
 
-    struct timeval timeout;
-    timeout.tv_sec = 5;
-    timeout.tv_usec = 0;
-    setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        struct timeval timeout;
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
+        setsockopt(client_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
 
 
-    FILE *file = fopen(filename, "a");
-    if (file == NULL) {
-        perror("File not found\n");
-        exit(1);
-    }
-
-    char buffer[1024];
-    while (1) {
-        memset(buffer, 0, sizeof(buffer));
-        int bytes_received = recv(client_socket, buffer, 1024, 0);
-
-        if (bytes_received <= 0) {
-            break;
+        FILE *file = fopen(filename, "a");
+        if (file == NULL) {
+            perror("File not found\n");
+            exit(1);
         }
 
-        printf("%s", buffer);
-        fflush(stdout);
-        
-        fprintf(file, "%s", buffer);
+        char buffer[1024];
+        while (1) {
+            memset(buffer, 0, sizeof(buffer));
+            int bytes_received = recv(client_socket, buffer, 1024, 0);
+
+            if (bytes_received <= 0) {
+                break;
+            }
+
+            printf("%s", buffer);
+            fflush(stdout);
+            
+            fprintf(file, "%s", buffer);
+        }
+
+        send(client_socket, "File written successfully", 1024, 0);
+
+        operation_logging(client_socket, 2, filename, null_string, "File write successful");
+
+        fclose(file);
+        sem_post(&file_semaphore->read_semaphore);
+    }
+    else
+    {
+        send(client_socket, "File semaphore not found", 1024, 0);
+        operation_logging(client_socket,2,filename,null_string,"File write not successful");
     }
 
-    send(client_socket, "File written successfully", 1024, 0);
-
-    operation_logging(client_socket, 2, filename, "null_string", "File write successful");
-
-    fclose(file);
-    sem_post(&write_mutex);
 }
 
 
 void file_deletion(int client_socket){
-    sem_wait(&write_mutex);
     char filename[1024];
     recv(client_socket,filename,1024,0);
     printf("File name received %s\n",filename);
-    fflush(stdout);
+    FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
+    if(file_semaphore)
+    {
+        sem_wait(&file_semaphore->write_semaphore);
+        fflush(stdout);
 
-    if(remove(filename)<0){
-        perror("File deletion failed\n");
-        operation_logging(client_socket,3,filename,null_string,"File Deletion Failed");
-        exit(1);
+        if(remove(filename)<0){
+            perror("File deletion failed\n");
+            operation_logging(client_socket,3,filename,null_string,"File Deletion Failed");
+            exit(1);
+        }
+        send(client_socket, "File deleted successfully\n",1024,0);
+        operation_logging(client_socket, 4, filename, null_string, "File deleted successfully");
+
+        sem_post(&file_semaphore->write_semaphore);
     }
-    send(client_socket, "File deleted successfully\n",1024,0);
-    operation_logging(client_socket, 4, filename, null_string, "File deleted successfully");
-
-    sem_post(&write_mutex);
 }
 
 void file_renamer(int client_socket){
-    sem_wait(&write_mutex);
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s",filename);
-    fflush(stdout);
-    char newname[1024];
-    recv(client_socket, newname, 1024, 0);  
+    FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
+    if(file_semaphore)
+    {
+        sem_wait(&file_semaphore->write_semaphore);
+        fflush(stdout);
+        char newname[1024];
+        recv(client_socket, newname, 1024, 0);  
 
-    printf("New name received %s",newname);
-    fflush(stdout);
-    if(rename(filename, newname) < 0){
-        perror("File renaming failed\n");
-        operation_logging(client_socket, 4, filename, newname, "File renaming failed");
-        exit(1);
+        printf("New name received %s",newname);
+        fflush(stdout);
+        if(rename(filename, newname) < 0){
+            perror("File renaming failed\n");
+            operation_logging(client_socket, 4, filename, newname, "File renaming failed");
+            exit(1);
+        }
+        send(client_socket, "File renamed successfully", 1024, 0);
+        operation_logging(client_socket, 4, filename, newname, "File renamed successfully");
+        sem_post(&file_semaphore->write_semaphore);
     }
-    send(client_socket, "File renamed successfully", 1024, 0);
-    operation_logging(client_socket, 4, filename, newname, "File renamed successfully");
-    sem_post(&write_mutex);
 }
 
 void metadata_display(int client_socket) {
-    sem_wait(&read_mutex);
-    read_count++;
-    if(read_count == 1){
-        sem_wait(&write_mutex);
-    }
-
-    sem_post(&read_mutex);
-
     char filename[1024];
     struct stat file_stat;
     memset(filename, 0, sizeof(filename));
 
     recv(client_socket, filename, 1024, 0);
     printf("File name received for metadata display: %s\n", filename);
+    fflush(stdout);
 
-    if (stat(filename, &file_stat) == -1) {
-        perror("Error getting file metadata");
-        send(client_socket, "Error: File not found or unable to access metadata.\n", 1024, 0);
-        operation_logging(client_socket, 6, filename, null_string, "File metadata access failed");
-        return;
+    FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
+    if(file_semaphore)
+    {
+        sem_wait(&file_semaphore->read_semaphore);
+
+        file_semaphore->read_count++;
+        if(file_semaphore->read_count == 1){
+            sem_wait(&file_semaphore->write_semaphore);
+        }
+
+        sem_post(&file_semaphore->read_semaphore);
+
+
+        if (stat(filename, &file_stat) == -1) {
+            perror("Error getting file metadata");
+            send(client_socket, "Error: File not found or unable to access metadata.\n", 1024, 0);
+            operation_logging(client_socket, 6, filename, null_string, "File metadata access failed");
+            return;
+        }
+
+        char metadata[4096]; 
+        snprintf(metadata, sizeof(metadata), 
+                "File Size: %lld bytes\n"
+                "Permissions: %c%c%c%c%c%c%c%c%c\n"
+                "Last Access Time: %s"
+                "Last Modification Time: %s"
+                "Last Status Change Time: %s",
+                (long long)file_stat.st_size,
+                (file_stat.st_mode & S_IRUSR) ? 'r' : '-',
+                (file_stat.st_mode & S_IWUSR) ? 'w' : '-',
+                (file_stat.st_mode & S_IXUSR) ? 'x' : '-',
+                (file_stat.st_mode & S_IRGRP) ? 'r' : '-',
+                (file_stat.st_mode & S_IWGRP) ? 'w' : '-',
+                (file_stat.st_mode & S_IXGRP) ? 'x' : '-',
+                (file_stat.st_mode & S_IROTH) ? 'r' : '-',
+                (file_stat.st_mode & S_IWOTH) ? 'w' : '-',
+                (file_stat.st_mode & S_IXOTH) ? 'x' : '-',
+                ctime(&file_stat.st_atime),
+                ctime(&file_stat.st_mtime),
+                ctime(&file_stat.st_ctime));
+
+        send(client_socket, metadata, sizeof(metadata), 0);
+        operation_logging(client_socket, 6, filename, null_string, "File metadata accessed successfully");
+        
+        sem_wait(&file_semaphore->read_semaphore);
+        file_semaphore->read_count--;
+        if(file_semaphore->read_count == 0){
+            sem_post(&file_semaphore->write_semaphore);
+        }
+        sem_post(&file_semaphore->read_semaphore);
     }
-
-    char metadata[4096]; 
-    snprintf(metadata, sizeof(metadata), 
-             "File Size: %lld bytes\n"
-             "Permissions: %c%c%c%c%c%c%c%c%c\n"
-             "Last Access Time: %s"
-             "Last Modification Time: %s"
-             "Last Status Change Time: %s",
-             (long long)file_stat.st_size,
-             (file_stat.st_mode & S_IRUSR) ? 'r' : '-',
-             (file_stat.st_mode & S_IWUSR) ? 'w' : '-',
-             (file_stat.st_mode & S_IXUSR) ? 'x' : '-',
-             (file_stat.st_mode & S_IRGRP) ? 'r' : '-',
-             (file_stat.st_mode & S_IWGRP) ? 'w' : '-',
-             (file_stat.st_mode & S_IXGRP) ? 'x' : '-',
-             (file_stat.st_mode & S_IROTH) ? 'r' : '-',
-             (file_stat.st_mode & S_IWOTH) ? 'w' : '-',
-             (file_stat.st_mode & S_IXOTH) ? 'x' : '-',
-             ctime(&file_stat.st_atime),
-             ctime(&file_stat.st_mtime),
-             ctime(&file_stat.st_ctime));
-
-    send(client_socket, metadata, sizeof(metadata), 0);
-    operation_logging(client_socket, 6, filename, null_string, "File metadata accessed successfully");
-    
-    sem_wait(&read_mutex);
-    read_count--;
-    if(read_count == 0){
-        sem_post(&write_mutex);
-    }
-    sem_post(&read_mutex);
 }
 
 void file_copy(int client_socket){
-    sem_wait(&read_mutex);
-    read_count++;
-    if(read_count == 1){
-        sem_wait(&write_mutex);
-    }
-
-    sem_post(&read_mutex);
 
     char filename[1024];
+    
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s",filename);
-    FILE *file = fopen(filename, "r");
-    if(file == NULL){
-        perror("File not found\n");
+    FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
+    if(file_semaphore)
+    {
+        sem_wait(&file_semaphore->read_semaphore);
+        file_semaphore->read_count++;
+        if(file_semaphore->read_count == 1){
+            sem_wait(&file_semaphore->write_semaphore);
+        }
+
+        sem_post(&file_semaphore->read_semaphore);
+
+        FILE *file = fopen(filename, "r");
+        if(file == NULL){
+            perror("File not found\n");
+            operation_logging(client_socket, 5, filename, null_string, "File copy failed");
+            exit(1);
+        }
+        char buffer[1024];
+        while(fgets(buffer, 1024, file)){
+            send(client_socket, buffer, 1024, 0);
+        }
+        operation_logging(client_socket, 5, filename, null_string, "File copied successfully");
+        sem_wait(&file_semaphore->read_semaphore);
+        file_semaphore->read_count--;
+        if(file_semaphore->read_count == 0){
+            sem_post(&file_semaphore->write_semaphore);
+        }
+        sem_post(&file_semaphore->read_semaphore);
+    }
+    else
+    {
         operation_logging(client_socket, 5, filename, null_string, "File copy failed");
-        exit(1);
+        return;
     }
-    char buffer[1024];
-    while(fgets(buffer, 1024, file)){
-        send(client_socket, buffer, 1024, 0);
-    }
-    operation_logging(client_socket, 5, filename, null_string, "File copied successfully");
-    sem_wait(&read_mutex);
-    read_count--;
-    if(read_count == 0){
-        sem_post(&write_mutex);
-    }
-    sem_post(&read_mutex);
 
 }
+
 
 void *client_handler(void *arg){
     int client_socket = *(int*)arg;
@@ -447,6 +535,7 @@ void *client_handler(void *arg){
 
 
 int main(){
+    initialize_semaphore_map();
     int server_socket;
     struct sockaddr_in server_address;
     socklen_t server_address_size = sizeof(server_address);
@@ -499,7 +588,7 @@ int main(){
             client_count = 0;
         }
     }
-
+    destroy_all_semaphores();
     for(int i=0;i<client_count;i++)
     {
         close(client_socket[i]);
