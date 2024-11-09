@@ -14,9 +14,9 @@
 #include<zlib.h>
 #include <glib.h>
 #include<assert.h>
-#include<signal.h>
+#include <signal.h>
 
-#define PORT 8001
+#define PORT 8002
 #define MAX_CLIENTS 10
 #define CHUNK 16384
 #define MAX_FILENAME_LEN 1004
@@ -68,138 +68,51 @@ void destroy_all_semaphores() {
     pthread_mutex_unlock(&map_lock);
 }
 
+void signal_handler(int signum) {
+    switch(signum) {
+        case SIGINT:
+            printf("Server shutdown initiated by SIGINT\n");
+            destroy_all_semaphores();
+            exit(0);
+            break;
+        case SIGSEGV:
+            fprintf(stderr, "Segmentation fault occurred\n");
+            destroy_all_semaphores();
+            exit(1);
+            break;
+        case SIGUSR1:
+            fprintf(stderr, "Custom signal SIGUSR1 received - Permission Error\n");
+            break;
+        case SIGUSR2:
+            fprintf(stderr, "Custom signal SIGUSR2 received - File operation error\n");
+            break;
+    }
+}
+
+void setup_signal_handling() {
+    struct sigaction sa;
+    sa.sa_handler = signal_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+
+    sigaction(SIGINT, &sa, NULL);
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGUSR1, &sa, NULL);
+    sigaction(SIGUSR2, &sa, NULL);
+}
+
+int check_file_access(const char* filename) {
+    if (strcmp(filename, "log.txt") == 0) {
+        raise(SIGUSR1);  // Raise permission error signal
+        return 0;
+    }
+    return 1;
+}
+
 char *null_string = "";
 
 int read_count;
 sem_t read_mutex, write_mutex;
-
-void file_decompression(int client_socket) {
-    char compressed_filename[1024];
-    recv(client_socket, compressed_filename, sizeof(compressed_filename), 0);
-    printf("Compressed file name received: %s\n", compressed_filename);
-
-    // Open the compressed file for reading
-    FILE *compressed_file = fopen(compressed_filename, "rb");
-    if (!compressed_file) {
-        perror("Could not open compressed file");
-        return;
-    }
-
-    // Get the size of the compressed file
-    fseek(compressed_file, 0, SEEK_END);
-    long compressed_size = ftell(compressed_file);
-    rewind(compressed_file);
-
-    // Allocate memory to read compressed data
-    char *compressed_data = malloc(compressed_size);
-    if (!compressed_data) {
-        perror("Memory allocation failed for compressed data");
-        fclose(compressed_file);
-        return;
-    }
-
-    // Read the compressed data into memory
-    fread(compressed_data, 1, compressed_size, compressed_file);
-    fclose(compressed_file);
-
-    // Guess the decompressed size
-    uLongf decompressed_size = compressed_size * 4;  // This is an initial guess, may need adjustment
-    char *decompressed_data = malloc(decompressed_size);
-    if (!decompressed_data) {
-        perror("Memory allocation failed for decompressed data");
-        free(compressed_data);
-        return;
-    }
-
-    // Decompress the data
-    int result = uncompress((Bytef *)decompressed_data, &decompressed_size, (const Bytef *)compressed_data, compressed_size);
-    if (result != Z_OK) {
-        fprintf(stderr, "Decompression failed with code %d\n", result);
-        free(compressed_data);
-        free(decompressed_data);
-        return;
-    }
-
-    // Construct the decompressed file name
-    char decompressed_filename[1024];
-    snprintf(decompressed_filename, sizeof(decompressed_filename), "decompressed_%.1009s", compressed_filename);
-
-    // Write the decompressed data to the new file
-    FILE *decompressed_file = fopen(decompressed_filename, "wb");
-    if (!decompressed_file) {
-        perror("Could not create decompressed file");
-        free(compressed_data);
-        free(decompressed_data);
-        return;
-    }
-
-    fwrite(decompressed_data, 1, decompressed_size, decompressed_file);
-    printf("File decompressed and saved as: %s\n", decompressed_filename);
-
-    // Clean up
-    fclose(decompressed_file);
-    free(compressed_data);
-    free(decompressed_data);
-}
-
-
-char *readcontent(const char *filename, int *input_size) {
-    FILE *file = fopen(filename, "rb");
-    if (!file) {
-        perror("File not found");
-        exit(1);
-    }
-
-    fseek(file, 0, SEEK_END);
-    *input_size = ftell(file);
-    rewind(file);
-
-    char *content = malloc(*input_size);
-    fread(content, 1, *input_size, file);
-    fclose(file);
-
-    return content;
-}
-
-void file_compression(int client_socket) {
-    char filename[1024] = {0};
-    recv(client_socket, filename, 1024, 0);
-    printf("File name received: %s\n", filename);
-
-    int input_size;
-    char *content_of_file = readcontent(filename, &input_size);
-
-    uLongf compressed_data_size = compressBound(input_size);
-    char *compressed_data = malloc(compressed_data_size);
-    int result = compress((Bytef *)compressed_data, &compressed_data_size, (const Bytef *)content_of_file, input_size);
-
-    if (result != Z_OK) {
-        fprintf(stderr, "Compression failed with code %d\n", result);
-        free(content_of_file);
-        free(compressed_data);
-        return;
-    }
-
-    // Creating a compressed filename with a .gz extension
-    char compress_filename[1024];
-    snprintf(compress_filename, sizeof(compress_filename), "compressed_%.1004s", filename);
-
-    // Writing the compressed data to a .gz file
-    FILE *compressed_file = fopen(compress_filename, "wb");
-    if (!compressed_file) {
-        perror("Could not create compressed file");
-        free(content_of_file);
-        free(compressed_data);
-        return;
-    }
-
-    fwrite(compressed_data, 1, compressed_data_size, compressed_file);
-    printf("File compressed and saved as: %s\n", compress_filename);
-
-    fclose(compressed_file);
-    free(content_of_file);
-    free(compressed_data);
-}
 
 void operation_logging(int client_socket, int operation, char *filename_accessed, char *newname, char *log_message){
     FILE *log_file = fopen("log.txt", "a");
@@ -231,13 +144,167 @@ void operation_logging(int client_socket, int operation, char *filename_accessed
     if(operation == 6){
         fprintf(log_file, "Metadata of file %s accessed at %s by %d STATUS %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
     }
+    if(operation == 7):
+    {
+        fprintf(log_file, "File %s compression operation at %s by %d STATUS : %s\n", 
+        filename_accessed, asctime(time_info), client_socket, log_message);
+    }
+    if(operation == 8):
+    {
+        fprintf(log_file, "File %s decompression operation at %s by %d STATUS : %s\n", 
+        filename_accessed, asctime(time_info), client_socket, log_message);
+    }
     fclose(log_file);
 }
+
+void file_decompression(int client_socket) {
+    char compressed_filename[1024];
+    recv(client_socket, compressed_filename, sizeof(compressed_filename), 0);
+    printf("Compressed file name received: %s\n", compressed_filename);
+
+    // Open the compressed file for reading
+    FILE *compressed_file = fopen(compressed_filename, "rb");
+    if (!compressed_file) {
+        perror("Could not open compressed file");
+        operation_logging(client,8,filename,null_string,"Could not open compressed file");
+        return;
+    }
+
+    // Get the size of the compressed file
+    fseek(compressed_file, 0, SEEK_END);
+    long compressed_size = ftell(compressed_file);
+    rewind(compressed_file);
+
+    // Allocate memory to read compressed data
+    char *compressed_data = malloc(compressed_size);
+    if (!compressed_data) {
+        perror("Memory allocation failed for compressed data");
+        operation_logging(client,8,filename,null_string,"Memory allocation failed for compressed data");
+        fclose(compressed_file);
+        return;
+    }
+
+    // Read the compressed data into memory
+    fread(compressed_data, 1, compressed_size, compressed_file);
+    fclose(compressed_file);
+
+    // Guess the decompressed size
+    uLongf decompressed_size = compressed_size * 4;  // This is an initial guess, may need adjustment
+    char *decompressed_data = malloc(decompressed_size);
+    if (!decompressed_data) {
+        perror("Memory allocation failed for decompressed data");
+        operation_logging(client,8,filename,null_string,"Memory allocation failed for decompressed data");
+        free(compressed_data);
+        return;
+    }
+
+    // Decompress the data
+    int result = uncompress((Bytef *)decompressed_data, &decompressed_size, (const Bytef *)compressed_data, compressed_size);
+    if (result != Z_OK) {
+        fprintf(stderr, "Decompression failed with code %d\n", result);
+        operation_logging(client,8,filename,null_string,"Decompression failed with code");
+        free(compressed_data);
+        free(decompressed_data);
+        return;
+    }
+
+    // Construct the decompressed file name
+    char decompressed_filename[1024];
+    snprintf(decompressed_filename, sizeof(decompressed_filename), "decompressed_%.1009s", compressed_filename);
+
+    // Write the decompressed data to the new file
+    FILE *decompressed_file = fopen(decompressed_filename, "wb");
+    if (!decompressed_file) {
+        perror("Could not create decompressed file");
+        operation_logging(client,8,filename,null_string,"Could not create decompressed file");
+        free(compressed_data);
+        free(decompressed_data);
+        return;
+    }
+
+    fwrite(decompressed_data, 1, decompressed_size, decompressed_file);
+    printf("File decompressed and saved as: %s\n", decompressed_filename);
+    operation_logging(client,8,filename,null_string,"Decompression success");
+
+    // Clean up
+    fclose(decompressed_file);
+    free(compressed_data);
+    free(decompressed_data);
+}
+
+
+char *readcontent(const char *filename, int *input_size) {
+    FILE *file = fopen(filename, "rb");
+    if (!file) {
+        perror("File not found");
+        raise(SIGUSR2);
+        exit(1);
+    }
+
+    fseek(file, 0, SEEK_END);
+    *input_size = ftell(file);
+    rewind(file);
+
+    char *content = malloc(*input_size);
+    fread(content, 1, *input_size, file);
+    fclose(file);
+
+    return content;
+}
+
+void file_compression(int client_socket) {
+    char filename[1024] = {0};
+    recv(client_socket, filename, 1024, 0);
+    printf("File name received: %s\n", filename);
+
+    int input_size;
+    char *content_of_file = readcontent(filename, &input_size);
+
+    uLongf compressed_data_size = compressBound(input_size);
+    char *compressed_data = malloc(compressed_data_size);
+    int result = compress((Bytef *)compressed_data, &compressed_data_size, (const Bytef *)content_of_file, input_size);
+
+    if (result != Z_OK) {
+        fprintf(stderr, "Compression failed with code %d\n", result);
+        operation_logging(client,7,filename,null_string,"Compression failed with code");
+        free(content_of_file);
+        free(compressed_data);
+        return;
+    }
+
+    // Creating a compressed filename with a .gz extension
+    char compress_filename[1024];
+    snprintf(compress_filename, sizeof(compress_filename), "compressed_%.1004s", filename);
+
+    // Writing the compressed data to a .gz file
+    FILE *compressed_file = fopen(compress_filename, "wb");
+    if (!compressed_file) {
+        perror("Could not create compressed file");
+        operation_logging(client,7,filename,null_string,"Could not create compressed file");
+        free(content_of_file);
+        free(compressed_data);
+        return;
+    }
+
+    fwrite(compressed_data, 1, compressed_data_size, compressed_file);
+    printf("File compressed and saved as: %s\n", compress_filename);
+    operation_logging(client,7,filename,null_string,"Compression successful");
+
+    fclose(compressed_file);
+    free(content_of_file);
+    free(compressed_data);
+}
+
 
 void filereader(int client_socket){
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
-    printf("File name received %s",filename);
+    printf("File name received %s\n",filename);
+
+    if (!check_file_access(filename)) {
+        raise(SIGUSR1);
+        return;
+    }
 
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
@@ -253,6 +320,7 @@ void filereader(int client_socket){
         FILE *file = fopen(filename, "r");
         if(file == NULL){
             perror("File not found\n");
+            raise(SIGUSR2);
             operation_logging(client_socket, 1, filename, null_string, "File read failed");
             exit(1);
         }
@@ -277,6 +345,10 @@ void filewriter(int client_socket) {
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s\n", filename);
     fflush(stdout);
+    if (!check_file_access(filename)) {
+        raise(SIGUSR1);
+        return;
+    }
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -291,6 +363,7 @@ void filewriter(int client_socket) {
         FILE *file = fopen(filename, "a");
         if (file == NULL) {
             perror("File not found\n");
+            raise(SIGUSR2);
             exit(1);
         }
 
@@ -329,6 +402,10 @@ void file_deletion(int client_socket){
     char filename[1024];
     recv(client_socket,filename,1024,0);
     printf("File name received %s\n",filename);
+    if (!check_file_access(filename)) {
+        raise(SIGUSR1);
+        return;
+    }
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -337,6 +414,7 @@ void file_deletion(int client_socket){
 
         if(remove(filename)<0){
             perror("File deletion failed\n");
+             raise(SIGUSR2);
             operation_logging(client_socket,3,filename,null_string,"File Deletion Failed");
             exit(1);
         }
@@ -350,7 +428,11 @@ void file_deletion(int client_socket){
 void file_renamer(int client_socket){
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
-    printf("File name received %s",filename);
+    printf("File name received %s\n",filename);
+    if (!check_file_access(filename)) {
+        raise(SIGUSR1);
+        return;
+    }
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -359,10 +441,11 @@ void file_renamer(int client_socket){
         char newname[1024];
         recv(client_socket, newname, 1024, 0);  
 
-        printf("New name received %s",newname);
+        printf("New name received %s\n",newname);
         fflush(stdout);
         if(rename(filename, newname) < 0){
             perror("File renaming failed\n");
+            raise(SIGUSR2);
             operation_logging(client_socket, 4, filename, newname, "File renaming failed");
             exit(1);
         }
@@ -380,6 +463,10 @@ void metadata_display(int client_socket) {
     recv(client_socket, filename, 1024, 0);
     printf("File name received for metadata display: %s\n", filename);
     fflush(stdout);
+    if (!check_file_access(filename)) {
+        raise(SIGUSR1);
+        return;
+    }
 
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
@@ -396,6 +483,7 @@ void metadata_display(int client_socket) {
 
         if (stat(filename, &file_stat) == -1) {
             perror("Error getting file metadata");
+            raise(SIGUSR2);
             send(client_socket, "Error: File not found or unable to access metadata.\n", 1024, 0);
             operation_logging(client_socket, 6, filename, null_string, "File metadata access failed");
             return;
@@ -439,7 +527,11 @@ void file_copy(int client_socket){
     char filename[1024];
     
     recv(client_socket, filename, 1024, 0);
-    printf("File name received %s",filename);
+    printf("File name received %s\n",filename);
+    if (!check_file_access(filename)) {
+        raise(SIGUSR1);
+        return;
+    }
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -479,10 +571,9 @@ void file_copy(int client_socket){
 
 
 void *client_handler(void *arg){
-    int client_socket = *(int*)arg;
+    int client_socket = (int)arg;
     char buffer[1024];
     int choice;
-    printf("HI\n");
     while (1)
     {
         printf("Waiting for command from client\n");
@@ -492,7 +583,6 @@ void *client_handler(void *arg){
             break;
         }
         printf("%d",choice);
-        fflush(stdout);
         if(choice == 1){
             filereader(client_socket);
 
@@ -517,14 +607,13 @@ void *client_handler(void *arg){
         {
             metadata_display(client_socket);
         }
-        if(choice == 8){
-            printf("HELLO choice 8");
+        if(choice == 7){
             file_compression(client_socket);
         }
-        if(choice == 9){
+        if(choice == 8){
             file_decompression(client_socket);
         }
-        if(choice == 10)
+        if(choice == 9)
         {
             break;
         }
@@ -536,6 +625,7 @@ void *client_handler(void *arg){
 
 
 int main(){
+    setup_signal_handling();
     initialize_semaphore_map();
     int server_socket;
     struct sockaddr_in server_address;
@@ -578,9 +668,9 @@ int main(){
         }
         printf("Connection established with client %d\n", client_count+1);
         pthread_create(&thread_id[client_count], NULL, client_handler, (void*)&client_socket[client_count]);
-        printf("HELLO\n");
+        // printf("HELLO\n");
         client_count++;
-        printf("%d\n", client_count);
+        // printf("%d\n", client_count);
 
         if(client_count == MAX_CLIENTS){
             for(int j=0; j<MAX_CLIENTS; j++){
