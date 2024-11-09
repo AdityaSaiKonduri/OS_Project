@@ -14,6 +14,7 @@
 #include<zlib.h>
 #include <glib.h>
 #include<assert.h>
+#include<signal.h>
 
 #define PORT 8001
 #define MAX_CLIENTS 10

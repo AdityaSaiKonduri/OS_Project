@@ -1,1 +1,4 @@
+# Ignore GCC output files
+a.out
 *.out
+*.o

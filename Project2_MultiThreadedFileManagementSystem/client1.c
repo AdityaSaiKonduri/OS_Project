@@ -92,9 +92,9 @@ int main() {
         printf("4. File Renaming\n");
         printf("5. File Copying\n");
         printf("6. File Metadata Display\n");
-        printf("7. Error Handling\n");
-        printf("8. Logging Operations\n");
-        printf("9. Compression and decompression of files\n");
+        printf("7. Compression\n");
+        printf("8. Decompression\n");
+        printf("9. Exit\n");
 
         int choice;
         scanf("%d", &choice);
@@ -165,33 +165,24 @@ int main() {
             printf("Requesting meta data for %s",command);
             send_command(command);
             receive_messages();
-        } else if (choice == 7) {
-            snprintf(command, sizeof(command), "Error_Handling");
-            send_command(command);
-        } else if (choice == 11) {
-            snprintf(command, sizeof(command), "Logging_Operation");
-            send_command(command);
-            printf("File to log: ");
-            scanf("%s", command);
-            send_command(command);
         } 
-        else if (choice == 8) {
-            command2 = 8;
+        else if (choice == 7) {
+            command2 = 7;
             send_command1(command2);
             printf("File to compress: ");
             scanf("%s", command);
             send_command(command);
         }
-        else if (choice == 9) {
-            command2 = 9;
+        else if (choice == 8) {
+            command2 = 8;
             send_command1(command2);
             printf("File to decompress: ");
             scanf("%s", command);
             send_command(command);
         }
-        else if (choice == 10)
+        else if (choice == 9)
         {
-            command2 = 10;
+            command2 = 9;
             send_command1(command2);
             break;
         }
