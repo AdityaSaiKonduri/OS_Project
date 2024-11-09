@@ -35,10 +35,10 @@ In this project, we aim to implement a file management system where multiple cli
    Similar to deletion, file renaming is handled in a way that only one client can rename a file at a time.
 
 5. **File Copying**  
-   A client can copy a file to a new file, but this operation does not block other clients from performing other tasks.
+   A client can copy a file to a new file, and this operation ensures no other operation is allowed to write during copying.
 
 6. **File Metadata Reading**  
-   Clients can read the metadata of files (e.g., size, creation date, etc.) without affecting other operations.
+   Clients can read the metadata of files (e.g., size, creation date, etc.) also making sure no other operation writes as the details will change.
 
 7. **Activity Logging (Readable Only by Server)**  
    All activities performed by the clients are logged, but only the server can access and read these logs. If client tries to access a negative acknowledgement is sent to the respective client.
@@ -110,4 +110,31 @@ In this project, we aim to implement a file management system where multiple cli
 
 ### Terminal Output Images:
 
-Coming Soon 
+1. **Concurrent File Reading**
+
+![ALT TEXT](images/filereader.png)
+
+2. **File Writing**
+
+![ALT TEXT](images/filewriting.png)
+
+3. **File Deletion**
+
+![ALT TEXT](images/filedelete.png)
+
+4. **File Rename**
+
+![ALT TEXT](images/filerename.png)
+
+5. **File Copy**
+
+![ALT TEXT](images/filecopy.jpg)
+
+6. **Metadata**
+
+![ALT TEXT](images/metadata.jpg)
+
+7. **Compression and Decompression**
+
+![ALT TEXT](images/compression&decompression.png)
+![ALT TEXT](images/filestructure_comp_decomp.png)

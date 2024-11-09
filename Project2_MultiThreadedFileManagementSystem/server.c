@@ -16,7 +16,7 @@
 #include<assert.h>
 #include <signal.h>
 
-#define PORT 8002
+#define PORT 8000
 #define MAX_CLIENTS 10
 #define CHUNK 16384
 #define MAX_FILENAME_LEN 1004
@@ -144,12 +144,12 @@ void operation_logging(int client_socket, int operation, char *filename_accessed
     if(operation == 6){
         fprintf(log_file, "Metadata of file %s accessed at %s by %d STATUS %s\n", filename_accessed, asctime(time_info), client_socket,log_message);
     }
-    if(operation == 7):
+    if(operation == 7)
     {
         fprintf(log_file, "File %s compression operation at %s by %d STATUS : %s\n", 
         filename_accessed, asctime(time_info), client_socket, log_message);
     }
-    if(operation == 8):
+    if(operation == 8)
     {
         fprintf(log_file, "File %s decompression operation at %s by %d STATUS : %s\n", 
         filename_accessed, asctime(time_info), client_socket, log_message);
@@ -166,7 +166,7 @@ void file_decompression(int client_socket) {
     FILE *compressed_file = fopen(compressed_filename, "rb");
     if (!compressed_file) {
         perror("Could not open compressed file");
-        operation_logging(client,8,filename,null_string,"Could not open compressed file");
+        operation_logging(client_socket,8,compressed_filename,null_string,"Could not open compressed file");
         return;
     }
 
@@ -179,7 +179,7 @@ void file_decompression(int client_socket) {
     char *compressed_data = malloc(compressed_size);
     if (!compressed_data) {
         perror("Memory allocation failed for compressed data");
-        operation_logging(client,8,filename,null_string,"Memory allocation failed for compressed data");
+        operation_logging(client_socket,8,compressed_filename,null_string,"Memory allocation failed for compressed data");
         fclose(compressed_file);
         return;
     }
@@ -193,7 +193,7 @@ void file_decompression(int client_socket) {
     char *decompressed_data = malloc(decompressed_size);
     if (!decompressed_data) {
         perror("Memory allocation failed for decompressed data");
-        operation_logging(client,8,filename,null_string,"Memory allocation failed for decompressed data");
+        operation_logging(client_socket,8,compressed_filename,null_string,"Memory allocation failed for decompressed data");
         free(compressed_data);
         return;
     }
@@ -202,7 +202,7 @@ void file_decompression(int client_socket) {
     int result = uncompress((Bytef *)decompressed_data, &decompressed_size, (const Bytef *)compressed_data, compressed_size);
     if (result != Z_OK) {
         fprintf(stderr, "Decompression failed with code %d\n", result);
-        operation_logging(client,8,filename,null_string,"Decompression failed with code");
+        operation_logging(client_socket,8,compressed_filename,null_string,"Decompression failed with code");
         free(compressed_data);
         free(decompressed_data);
         return;
@@ -216,7 +216,7 @@ void file_decompression(int client_socket) {
     FILE *decompressed_file = fopen(decompressed_filename, "wb");
     if (!decompressed_file) {
         perror("Could not create decompressed file");
-        operation_logging(client,8,filename,null_string,"Could not create decompressed file");
+        operation_logging(client_socket,8,decompressed_filename,null_string,"Could not create decompressed file");
         free(compressed_data);
         free(decompressed_data);
         return;
@@ -224,7 +224,7 @@ void file_decompression(int client_socket) {
 
     fwrite(decompressed_data, 1, decompressed_size, decompressed_file);
     printf("File decompressed and saved as: %s\n", decompressed_filename);
-    operation_logging(client,8,filename,null_string,"Decompression success");
+    operation_logging(client_socket,8,decompressed_filename,null_string,"Decompression success");
 
     // Clean up
     fclose(decompressed_file);
@@ -266,7 +266,7 @@ void file_compression(int client_socket) {
 
     if (result != Z_OK) {
         fprintf(stderr, "Compression failed with code %d\n", result);
-        operation_logging(client,7,filename,null_string,"Compression failed with code");
+        operation_logging(client_socket,7,filename,null_string,"Compression failed with code");
         free(content_of_file);
         free(compressed_data);
         return;
@@ -280,7 +280,7 @@ void file_compression(int client_socket) {
     FILE *compressed_file = fopen(compress_filename, "wb");
     if (!compressed_file) {
         perror("Could not create compressed file");
-        operation_logging(client,7,filename,null_string,"Could not create compressed file");
+        operation_logging(client_socket,7,filename,null_string,"Could not create compressed file");
         free(content_of_file);
         free(compressed_data);
         return;
@@ -288,7 +288,7 @@ void file_compression(int client_socket) {
 
     fwrite(compressed_data, 1, compressed_data_size, compressed_file);
     printf("File compressed and saved as: %s\n", compress_filename);
-    operation_logging(client,7,filename,null_string,"Compression successful");
+    operation_logging(client_socket,7,filename,null_string,"Compression successful");
 
     fclose(compressed_file);
     free(content_of_file);
@@ -387,7 +387,7 @@ void filewriter(int client_socket) {
         operation_logging(client_socket, 2, filename, null_string, "File write successful");
 
         fclose(file);
-        sem_post(&file_semaphore->read_semaphore);
+        sem_post(&file_semaphore->write_semaphore);
     }
     else
     {
@@ -571,7 +571,7 @@ void file_copy(int client_socket){
 
 
 void *client_handler(void *arg){
-    int client_socket = (int)arg;
+    int client_socket = *(int*)arg;
     char buffer[1024];
     int choice;
     while (1)

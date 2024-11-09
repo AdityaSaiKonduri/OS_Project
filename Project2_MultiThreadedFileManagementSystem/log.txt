@@ -68,3 +68,47 @@ File vk3.txt read at Wed Nov  6 17:28:53 2024
  by 4 STATUS : File read successfully
 File vk3.txt renamed to  at Wed Nov  6 17:31:29 2024
  by 4 STATUS : File deleted successfully
+File file4.txt read at Sat Nov  9 17:37:54 2024
+ by 5 STATUS : File read successfully
+File file4.txt read at Sat Nov  9 17:37:55 2024
+ by 4 STATUS : File read successfully
+File file1.txt written at Sat Nov  9 17:40:58 2024
+ by 4 STATUS : File write successful
+File vk.txt compression operation at Sat Nov  9 17:42:05 2024
+ by 6 STATUS : Compression successful
+File decompressed_compressed_vk.txt decompression operation at Sat Nov  9 17:42:38 2024
+ by 6 STATUS : Decompression success
+File decompressed_compressed_vk.txt read at Sat Nov  9 17:43:22 2024
+ by 6 STATUS : File read successfully
+File file4.txt compression operation at Sat Nov  9 17:46:25 2024
+ by 4 STATUS : Compression successful
+File decompressed_compressed_file4.txt decompression operation at Sat Nov  9 17:47:06 2024
+ by 5 STATUS : Decompression success
+File decompressed_compressed_file4.txt read at Sat Nov  9 17:47:21 2024
+ by 5 STATUS : File read successfully
+File decompressed_compressed_file4.txt read at Sat Nov  9 17:47:32 2024
+ by 4 STATUS : File read successfully
+File file1.txt written at Sat Nov  9 17:51:26 2024
+ by 4 STATUS : File write successful
+File file1.txt written at Sat Nov  9 17:51:47 2024
+ by 5 STATUS : File write successful
+File file1.txt read at Sat Nov  9 17:52:07 2024
+ by 6 STATUS : File read successfully
+File lear1.txt read at Sat Nov  9 17:52:12 2024
+ by 6 STATUS : File read failed
+File file2.txt written at Sat Nov  9 17:52:56 2024
+ by 4 STATUS : File write successful
+File file2.txt written at Sat Nov  9 17:53:06 2024
+ by 5 STATUS : File write successful
+File file2.txt read at Sat Nov  9 17:53:20 2024
+ by 5 STATUS : File read successfully
+File file2.txt read at Sat Nov  9 17:53:47 2024
+ by 6 STATUS : File read successfully
+File file1.txt renamed to  at Sat Nov  9 17:55:33 2024
+ by 5 STATUS : File deleted successfully
+File file1.txt read at Sat Nov  9 17:55:37 2024
+ by 6 STATUS : File read failed
+File file2.txt renamed to renametest.txt at Sat Nov  9 17:57:15 2024
+ by 4 STATUS : File renamed successfully
+File renametest.txt read at Sat Nov  9 17:57:27 2024
+ by 5 STATUS : File read successfully

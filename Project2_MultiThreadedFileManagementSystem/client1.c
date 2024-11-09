@@ -6,7 +6,7 @@
 #include <semaphore.h>
 #include <time.h>
 
-#define PORT 8001
+#define PORT 8000
 #define BUFFER_SIZE 4096
 
 int client_socket;
