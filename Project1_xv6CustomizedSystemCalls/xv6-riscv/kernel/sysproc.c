@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "syscall.h"
 
 uint64
 sys_exit(void)
@@ -90,4 +91,22 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+int
+sys_cps(void)
+{
+    struct proc *p;
+
+    printf("name \t pid \t state \t \n");
+    for(p = &proc[0]; p < &proc[NPROC]; p++)
+    {
+        if(p->state == SLEEPING)
+            printf("%s \t %d  \t SLEEPING \t \n ", p->name, p->pid);
+        else if(p->state == RUNNING)
+            printf("%s \t %d  \t RUNNING \t \n ", p->name, p->pid);
+        else if(p->state == RUNNABLE)
+            printf("%s \t %d  \t RUNNABLE \t \n ", p->name, p->pid);
+    }
+    return 22;
 }
