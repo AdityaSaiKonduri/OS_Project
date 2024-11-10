@@ -1,4 +1,6 @@
 // Saved registers for kernel context switches.
+
+#define SIGINT 2
 struct context {
   uint64 ra;
   uint64 sp;
@@ -104,6 +106,8 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  int pending_signals;
+  void (*sig_handlers[32])(int);
 };
 
 extern struct proc proc[NPROC];

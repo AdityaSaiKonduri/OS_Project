@@ -140,6 +140,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_cps\
 	$U/_zombie\
+	$U/_signal\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
