@@ -149,34 +149,58 @@ consoleintr(int c)
     }
     break;
   case C('H'): // Backspace
-  case '\x7f': // Delete key
+    if(cons.e != cons.w){
+      cons.e--;
+      consputc(BACKSPACE);
+    }
+    break;
+  case C('C'):  // Handle Ctrl+C for SIGINT
+    // When Ctrl+C is pressed, set the killed flag to terminate the foreground process
+    {
+      struct proc *p = myproc();  // Get the current process
+      if (p != 0) {  // Ensure the process is valid
+        printf("\nDetected Ctrl+C\n");
+        if(p->sig_handlers[2] != 0){
+          printf("Calling custom SIGINT handler\n");
+          p->sig_handlers[2](SIGINT);
+        }
+        else{
+          sigint_default_handler();
+        }
+        p->killed = 1;  // Set the killed flag to terminate the process
+        // Optionally: You can also trigger a signal handler in user space if defined
+      }
+    }
+    break;
+  case '\x7f': // Delete key (Backspace)
     if(cons.e != cons.w){
       cons.e--;
       consputc(BACKSPACE);
     }
     break;
   default:
-    if(c != 0 && cons.e-cons.r < INPUT_BUF_SIZE){
-      c = (c == '\r') ? '\n' : c;
+    if(c != 0 && cons.e - cons.r < INPUT_BUF_SIZE){
+      c = (c == '\r') ? '\n' : c;  // Convert carriage return to newline
 
-      // echo back to the user.
+      // Echo back the character to the user
       consputc(c);
 
-      // store for consumption by consoleread().
+      // Store the character for consumption by consoleread().
       cons.buf[cons.e++ % INPUT_BUF_SIZE] = c;
 
-      if(c == '\n' || c == C('D') || cons.e-cons.r == INPUT_BUF_SIZE){
-        // wake up consoleread() if a whole line (or end-of-file)
-        // has arrived.
+      // If a whole line has arrived (newline or buffer is full), wake up consoleread().
+      if(c == '\n' || c == C('D') || cons.e - cons.r == INPUT_BUF_SIZE){
         cons.w = cons.e;
         wakeup(&cons.r);
       }
     }
     break;
   }
-  
+
   release(&cons.lock);
 }
+
+
 
 void
 consoleinit(void)
