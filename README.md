@@ -9,7 +9,7 @@
 
 ## Question 1:  
 **System Calls Implemented:** `cps`, `signal`, `pthread`, `message queue`
-
+**Make sure that your Ubuntu version is 24.04 if you're using WSL**
 ---
 
 ### Problem Overview
