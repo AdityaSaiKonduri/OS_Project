@@ -8,12 +8,22 @@
 ---
 
 ## Question 1:  
-**On Progress**
+**System Calls Implemented:** `cps`, `signal`, `pthread`, `message queue`
 
 ---
 
 ### Problem Overview
+In this project we aimed to implement 4 new system calls and addd them to the xv6-riscv operating system.
+1. **cps**
+   Displays all the processes currently running.
 
+2. **signal**
+   Implemented default handler for a user generated inteerupt (`SIG_INT`).
+   Added Ctrl+C as a command to send a user-interrupt
+3. **pthread**
+  Implemented a create thread function and alloted a kernel stack for each thread during execution.
+4. **message queue**
+  Implemented `msgget` to allocate certain amount of bytes for inter-process-communication.
 ---
 
 ## Question 2: Multi-Threaded File Management System  
