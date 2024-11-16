@@ -24,6 +24,8 @@ In this project we aimed to implement 4 new system calls and addd them to the xv
   Implemented a create thread function and alloted a kernel stack for each thread during execution.
 #### 4. **message queue**
   Implemented `msgget` to allocate certain amount of bytes for inter-process-communication.
+
+  
 ---
 
 ## Question 2: Multi-Threaded File Management System  
