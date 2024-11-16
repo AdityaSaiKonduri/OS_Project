@@ -6,9 +6,11 @@
 4. Pranaav Prasad - CS22B2022 
 
 ---
+**Make sure that your Ubuntu version is 24.04 if you're using WSL**
+---
 
 ## Question 1:  System Calls Implemented:** `cps`, `signal`, `pthread`, `message queue`
-**Make sure that your Ubuntu version is 24.04 if you're using WSL**
+
 ---
 
 ### Problem Overview
