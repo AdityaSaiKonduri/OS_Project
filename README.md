@@ -11,8 +11,6 @@
 
 ## Question 1:  System Calls Implemented:** `cps`, `signal`, `pthread`, `message queue`
 
----
-
 ### Problem Overview
 In this project we aimed to implement 4 new system calls and addd them to the xv6-riscv operating system.
 #### 1. **cps**
