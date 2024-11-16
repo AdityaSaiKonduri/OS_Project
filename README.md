@@ -15,7 +15,7 @@
 ### Problem Overview
 In this project we aimed to implement 4 new system calls and addd them to the xv6-riscv operating system.
 #### 1. **cps**
-   Displays all the processes currently running.
+   Displays all the processes currently running, their process IDs and current states.
 
 #### 2. **signal**
    Implemented default handler for a user generated inteerupt (`SIG_INT`).<br/>
@@ -23,9 +23,8 @@ In this project we aimed to implement 4 new system calls and addd them to the xv
 #### 3. **pthread**
   Implemented a create thread function and alloted a kernel stack for each thread during execution.
 #### 4. **message queue**
-  Implemented `msgget` to allocate certain amount of bytes for inter-process-communication.
+  Implemented `msgget` to allocate certain amount of memory for inter-process-communication.
 
-  
 ---
 
 ## Question 2: Multi-Threaded File Management System  
