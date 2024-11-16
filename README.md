@@ -9,7 +9,7 @@
 **Make sure that your Ubuntu version is 24.04 if you're using WSL**
 ---
 
-## Question 1:  System Calls Implemented:** `cps`, `signal`, `pthread`, `message queue`
+## Question 1:  System Calls Implemented: `cps`, `signal`, `pthread`, `message queue`
 
 ### Problem Overview
 In this project we aimed to implement 4 new system calls and addd them to the xv6-riscv operating system.
