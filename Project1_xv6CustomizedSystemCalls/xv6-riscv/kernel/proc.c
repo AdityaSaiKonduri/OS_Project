@@ -55,9 +55,10 @@ procinit(void)
       initlock(&p->lock, "proc");
       p->state = UNUSED;
       p->kstack = KSTACK((int) (p - proc));
+      // printf("\nInit sighandlers to NULL\n");
       for (int i = 0; i < 32; i++) {
-      p->sig_handlers[i] = 0;  // Initialize handlers to NULL
-    }
+        p->sig_handlers[i] = 0;  // Initialize handlers to NULL
+      }
   }
 }
 
