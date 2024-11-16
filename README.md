@@ -18,7 +18,7 @@ In this project we aimed to implement 4 new system calls and addd them to the xv
    Displays all the processes currently running.
 
 #### 2. **signal**
-   Implemented default handler for a user generated inteerupt (`SIG_INT`).
+   Implemented default handler for a user generated inteerupt (`SIG_INT`).<br/>
    Added Ctrl+C as a command to send a user-interrupt
 #### 3. **pthread**
   Implemented a create thread function and alloted a kernel stack for each thread during execution.
