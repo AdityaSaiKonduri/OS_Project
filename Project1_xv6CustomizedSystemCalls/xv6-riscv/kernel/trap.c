@@ -53,6 +53,7 @@ usertrap(void)
   if(r_scause() == 8){
     // system call
     if(p != 0 && p->state == RUNNING){
+      // printf("System call trap handler\n");
       handle_signals();
     }
 

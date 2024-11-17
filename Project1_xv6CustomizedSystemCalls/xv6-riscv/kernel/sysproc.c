@@ -115,16 +115,19 @@ uint64
 sys_signal(void) {
     int signum;
     uint64 handler;
-    // printf("\nIn sys_signal function\n");
-
+  
     // Retrieve the signal number and the handler address
     argint(0, &signum);
     argaddr(1, &handler);
 
+    printf("\nIn sys_signal function value of signum : %d\n", signum);
     // Only handle SIGINT for now
     if (signum != SIGINT)
         return -1;
-
+    
+    if(handler == 0){
+      printf("NULL Handler\n");
+    }
     // Set the signal handler for the process
     struct proc *p = myproc();
     p->sig_handlers[SIGINT] = (void (*)(int))handler;
