@@ -197,5 +197,15 @@ void            virtio_disk_init(void);
 void            virtio_disk_rw(struct buf *, int);
 void            virtio_disk_intr(void);
 
+// Thread.c
+uint64 sys_thread_create(void);
+uint64 sys_thread_exit(void);
+uint64 sys_thread_join(void);
+
+struct proc*    myproc(void);
+struct proc*    allocproc(void);
+void            freeproc(struct proc*);
+
+
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))

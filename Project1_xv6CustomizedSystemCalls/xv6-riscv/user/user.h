@@ -43,6 +43,9 @@ int msgctl(int msqid, int cmd, struct msg_queue *buf);
 void signal(int signum, void (*handler)(int)); 
 void handle_signals(void);  // Ensure this function is implemented somewhere
 void sigint_default_handler(void);  // Default handler for SIGINT (if needed)
+int thread_create(void (*fn)(void*), void *arg, uint64 stack);
+void thread_exit(void *retval);
+int thread_join(uint64 *retval);
 
 // ulib.c
 int stat(const char*, struct stat*);

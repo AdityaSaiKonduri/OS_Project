@@ -7,6 +7,11 @@
 #include "syscall.h"
 #include "defs.h"
 
+
+int thread_create(uint64 fn, uint64 arg, uint64 stack);
+void thread_exit(void *retval); 
+int thread_join(uint64 *retval);
+
 // Fetch the uint64 at addr from the current process.
 int
 fetchaddr(uint64 addr, uint64 *ip)
@@ -109,6 +114,9 @@ extern uint64 sys_msgget(void);
 extern uint64 sys_msgsnd(void);
 extern uint64 sys_msgrcv(void);
 extern uint64 sys_msgctl(void);
+extern uint64 sys_thread_create(void);
+extern uint64 sys_thread_exit(void);
+extern uint64 sys_thread_join(void);
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -140,6 +148,9 @@ static uint64 (*syscalls[])(void) = {
 [SYS_msgsnd]  sys_msgsnd,
 [SYS_msgrcv]  sys_msgrcv,
 [SYS_msgctl]  sys_msgctl,
+[SYS_thread_create] sys_thread_create,
+[SYS_thread_exit] sys_thread_exit,
+[SYS_thread_join] sys_thread_join,
 };
 
 void

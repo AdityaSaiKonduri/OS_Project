@@ -8,6 +8,8 @@
 #include <stddef.h>
 
 
+struct spinlock proc_lock;
+
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -18,9 +20,15 @@ int nextpid = 1;
 struct spinlock pid_lock;
 
 extern void forkret(void);
-static void freeproc(struct proc *p);
+// static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
+
+struct proc* allocthread(struct proc *parent);
+void freethread(struct proc *t);
+int thread_create(uint64 fn, uint64 arg, uint64 stack);
+void thread_exit(void *retval);
+int thread_join(uint64 *retval);
 
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
@@ -112,7 +120,7 @@ allocpid()
 // If found, initialize state required to run in the kernel,
 // and return with p->lock held.
 // If there are no free procs, or a memory allocation fails, return 0.
-static struct proc*
+struct proc*
 allocproc(void)
 {
   struct proc *p;
@@ -158,7 +166,7 @@ found:
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
-static void
+void
 freeproc(struct proc *p)
 {
   if(p->trapframe)
@@ -175,6 +183,12 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  if(p->is_thread && p->stack) {
+    kfree(p->stack);
+    p->stack = 0;
+  }
+  p->is_thread = 0;
+  p->thread_parent = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -699,7 +713,50 @@ procdump(void)
     printf("\n");
   }
 }
+void thread_exit(void *retval) {
+    exit((uint64)retval);
+}
+int thread_create(uint64 fn, uint64 arg, uint64 stack) {
+    struct proc *np;
+    struct proc *p = myproc();
+    
+    // Validate parameters
+    if(fn == 0 || stack == 0) {
+        return -1;
+    }
+    
+    // Allocate thread
+    if((np = allocthread(p)) == 0) {
+        return -1;
+    }
 
+     if(np->trapframe == 0) {
+        freeproc(np);
+        release(&np->lock);
+        return -1;
+    }
+    
+  *(np->trapframe) = *(p->trapframe);
+
+    // Set up new thread's registers
+    np->trapframe->a0 = arg;        // First argument
+    np->trapframe->sp = stack;      // Stack pointer
+    np->trapframe->epc = fn;        // Program counter
+    
+    // Make sure stack is page-aligned and within process address space
+    
+    // printf("Hello");
+
+
+    np->state = RUNNABLE;
+    
+    // Save the pid before releasing the lock
+    int pid = np->pid;
+    release(&np->lock);
+    
+    return pid;
+}
+// __attribute__((used))
 void
 handle_signals(void)
 {
@@ -720,10 +777,90 @@ handle_signals(void)
 }
 
 // Default handler for SIGINT (terminates the process)
+// __attribute__((used))
 void
 sigint_default_handler(void)
 {
   struct proc *p = myproc();
   p->killed = 1;  // Mark the process for termination
   printf("Entered sigint default handler\n");
+
+    // Copy parent trapframe
+}   
+    
+
+int thread_join(uint64 *retval) {
+    struct proc *p = myproc();
+    struct proc *pp;
+
+    for(pp = proc; pp < &proc[NPROC]; pp++) {
+        // Look for a thread that belongs to the current process
+        if(pp->thread_parent == p && pp->state != UNUSED) {
+            acquire(&pp->lock);
+            if(pp->state == ZOMBIE) {
+                // If retval pointer is provided, copy the thread's exit status
+                if(retval != 0) {
+                    if(copyout(p->pagetable, (uint64)retval, (char*)&pp->xstate, sizeof(uint64)) < 0) {
+                        release(&pp->lock);
+                        return -1;
+                    }
+                }
+                // Clean up the thread
+                freeproc(pp);
+                release(&pp->lock);
+                return pp->pid;
+            }
+            release(&pp->lock);
+        }
+    }
+    return -1;
+}
+
+struct proc* allocthread(struct proc* parent) {
+    struct proc *p;
+
+    for(p = proc; p < &proc[NPROC]; p++) {
+        acquire(&p->lock);
+        if(p->state == UNUSED)
+            goto found;
+        release(&p->lock);
+    }
+    return 0;
+
+found:
+    p->pid = allocpid();
+    p->state = USED;
+    p->parent = parent;
+
+    // Allocate kernel stack (required for kernel operations)
+    if((p->kstack = (uint64)kalloc()) == 0){
+        freeproc(p);
+        release(&p->lock);
+        return 0;
+    }
+
+    // Allocate trapframe
+    if((p->trapframe = (struct trapframe *)kalloc()) == 0){
+        freeproc(p);
+        release(&p->lock);
+        return 0;
+    }
+
+    // Share address space with parent
+    p->pagetable = parent->pagetable;
+    p->sz = parent->sz;
+
+    // Thread-specific initialization
+    p->is_thread = 1;
+    p->thread_parent = parent;
+    p->killed = 0;
+    p->xstate = 0;
+    p->cwd = idup(parent->cwd);
+
+    // Initialize context
+    memset(&p->context, 0, sizeof(p->context));
+    p->context.ra = (uint64)forkret;
+    p->context.sp = p->kstack + PGSIZE;
+
+    return p;
 }

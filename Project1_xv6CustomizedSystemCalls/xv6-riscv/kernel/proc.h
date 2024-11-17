@@ -99,6 +99,7 @@ struct proc {
 
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
+  uint64 ustack;
   uint64 sz;                   // Size of process memory (bytes)
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S
@@ -108,6 +109,22 @@ struct proc {
   char name[16];               // Process name (debugging)
   int pending_signals;
   void (*sig_handlers[32])(int);
+  int is_thread;           // Is this process a thread?
+  void *stack;            // Thread stack pointer
+  struct proc *thread_parent; // Parent thread
+   void *retval;
+   int thread_id;        // Thread ID within the process
+  int num_threads;      // Number of threads (for parent process)
 };
 
 extern struct proc proc[NPROC];
+extern struct spinlock proc_lock;
+struct proc* allocthread(struct proc* parent);
+
+
+int thread_create(uint64 fn, uint64 arg, uint64 stack);
+void thread_exit(void *retval);
+int thread_join(uint64 *retval);
+
+void sigint_default_handler(void);
+void handle_signals(void);

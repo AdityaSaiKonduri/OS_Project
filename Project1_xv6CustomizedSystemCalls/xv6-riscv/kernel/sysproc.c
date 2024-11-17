@@ -134,3 +134,31 @@ sys_signal(void) {
 
     return 0;
 }
+uint64 sys_thread_create(void)
+{
+    uint64 fn, arg, stack;
+    argaddr(0, &fn);
+    argaddr(1, &arg);
+    argaddr(2, &stack);
+
+    if(fn == 0 || arg == 0) 
+        return -1;
+    printf("\n");
+    return thread_create(fn, arg, stack);
+}
+
+
+uint64 sys_thread_exit(void)
+{
+    uint64 retval;
+    argaddr(0, &retval);  // Get return value from user space
+    exit((int)retval);    // Cast to int as exit expects an int
+    return 0;             // Never reaches here
+}
+
+uint64 sys_thread_join(void)
+{
+    uint64 addr;
+    argaddr(0, &addr);  // addr is pointer to where return value should be stored
+    return thread_join((uint64*)addr);
+}

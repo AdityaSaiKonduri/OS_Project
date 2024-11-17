@@ -42,3 +42,6 @@ entry("msgget");
 entry("msgsnd");
 entry("msgrcv");
 entry("msgctl");
+entry("thread_create");
+entry("thread_exit");
+entry("thread_join");

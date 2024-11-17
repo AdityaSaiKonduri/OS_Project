@@ -11,6 +11,9 @@ r_mhartid()
 
 // Machine Status Register, mstatus
 
+#define PGSIZE 4096
+#define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
+
 #define MSTATUS_MPP_MASK (3L << 11) // previous mode.
 #define MSTATUS_MPP_M (3L << 11)
 #define MSTATUS_MPP_S (1L << 11)
