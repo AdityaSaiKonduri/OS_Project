@@ -1,7 +1,17 @@
+#ifndef _USER_H_
+#define _USER_H_
+
+#include "../kernel/types.h"
+#include "../kernel/msg.h"
+
 struct stat;
 #define SIGINT 2  // Define SIGINT signal number if not already defined
 typedef unsigned int uint;
 // System calls
+struct msg;
+struct msg_queue;
+
+// system calls
 int fork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int*);
@@ -24,6 +34,10 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int cps(void);
+int msgget(int key, int msgflg);
+int msgsnd(int msqid, const struct msg_buf *msgp, int msgsz, int msgflg);
+int msgrcv(int msqid, struct msg_buf *msgp, int msgsz, long msgtyp, int msgflg);
+int msgctl(int msqid, int cmd, struct msg_queue *buf);
 
 // Signal handling
 void signal(int signum, void (*handler)(int)); 
@@ -48,3 +62,5 @@ void *memcpy(void *, const void *, unsigned int);  // Use unsigned int instead o
 // umalloc.c
 void* malloc(unsigned int);  // Use unsigned int instead of uint
 void free(void*);
+
+#endif

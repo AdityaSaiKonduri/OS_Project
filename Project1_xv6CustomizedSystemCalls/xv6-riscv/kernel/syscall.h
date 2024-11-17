@@ -22,3 +22,7 @@
 #define SYS_close  21
 #define SYS_cps    22
 #define SYS_signal 23
+#define SYS_msgget 24
+#define SYS_msgsnd 25
+#define SYS_msgrcv 26
+#define SYS_msgctl 27

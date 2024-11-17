@@ -1,3 +1,5 @@
+#include "types.h"
+
 struct buf;
 struct context;
 struct file;
@@ -77,7 +79,7 @@ int             piperead(struct pipe*, uint64, int);
 int             pipewrite(struct pipe*, uint64, int);
 
 // printf.c
-int            printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
+int             printf(char*, ...) __attribute__ ((format (printf, 1, 2)));
 void            panic(char*) __attribute__((noreturn));
 void            printfinit(void);
 
@@ -110,6 +112,12 @@ int             cps(void);
 void            handle_signals(void);
 uint64          sys_signal(void);
 void            sigint_default_handler(void);
+uint64          sys_msgget(void);
+uint64          sys_msgsnd(void);
+uint64          sys_msgrcv(void);
+uint64          sys_msgctl(void);
+void            msginit(void);
+
 
 // swtch.S
 void            swtch(struct context*, struct context*);
@@ -138,9 +146,9 @@ int             strncmp(const char*, const char*, uint);
 char*           strncpy(char*, const char*, int);
 
 // syscall.c
-void            argint(int, int*);
+int            argint(int, int*);
 int             argstr(int, char*, int);
-void            argaddr(int, uint64 *);
+int            argaddr(int, uint64 *);
 int             fetchstr(uint64, char*, int);
 int             fetchaddr(uint64, uint64*);
 void            syscall();
