@@ -6,7 +6,7 @@
 #include <semaphore.h>
 #include <time.h>
 
-#define PORT 8000
+#define PORT 8002
 #define BUFFER_SIZE 4096
 
 int client_socket;
@@ -76,6 +76,11 @@ int main() {
         return 1;
     }
     printf("Connected to the server.\n");
+
+    char client_id[50];
+    printf("Enter your client ID: ");
+    scanf("%s", client_id);
+    send(client_socket, client_id, strlen(client_id), 0);
 
     struct timeval timeout;
     timeout.tv_sec = 7;

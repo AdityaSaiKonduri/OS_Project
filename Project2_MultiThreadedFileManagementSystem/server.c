@@ -16,7 +16,7 @@
 #include<assert.h>
 #include <signal.h>
 
-#define PORT 8000
+#define PORT 8002
 #define MAX_CLIENTS 10
 #define CHUNK 16384
 #define MAX_FILENAME_LEN 1004
@@ -31,6 +31,16 @@ typedef struct {
 GHashTable *semaphore_map;
 pthread_mutex_t map_lock = PTHREAD_MUTEX_INITIALIZER;
 
+typedef struct {
+    char client_id[50];
+    char file_name[1024];
+    int read_permission;
+    int write_permission;
+} ACL_Entry;
+
+GHashTable *acl_map;
+pthread_mutex_t acl_lock = PTHREAD_MUTEX_INITIALIZER;
+
 void free_semaphore(gpointer data) {
     FileSemaphore *file_sem = (FileSemaphore *)data;
     sem_destroy(&file_sem->read_semaphore);
@@ -40,6 +50,50 @@ void free_semaphore(gpointer data) {
 
 void initialize_semaphore_map() {
     semaphore_map = g_hash_table_new_full(g_str_hash, g_str_equal, free, free_semaphore);
+}
+
+void load_acl(const char *acl_filename) {
+    FILE *file = fopen(acl_filename, "r");
+    if (!file) {
+        perror("Could not open ACL file");
+        exit(1);
+    }
+
+    // Create a hash table that stores a GSList (linked list) of ACL entries for each client
+    acl_map = g_hash_table_new_full(g_str_hash, g_str_equal, free, NULL);
+
+    char line[2048];
+    while (fgets(line, sizeof(line), file)) {
+        ACL_Entry *entry = malloc(sizeof(ACL_Entry));
+        sscanf(line, "%s %s %d %d", entry->client_id, entry->file_name, 
+               &entry->read_permission, &entry->write_permission);
+        
+        // Get the current list of entries for this client
+        GSList *entries = g_hash_table_lookup(acl_map, entry->client_id);
+        
+        // Add the new entry to the list
+        entries = g_slist_append(entries, entry);
+        
+        // Update or insert the new list in the hash table
+        g_hash_table_insert(acl_map, g_strdup(entry->client_id), entries);
+    }
+
+    fclose(file);
+
+    // Debug print to verify entries
+    printf("Loaded ACL entries:\n");
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, acl_map);
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
+        GSList *entries = (GSList *)value;
+        for (GSList *l = entries; l != NULL; l = l->next) {
+            ACL_Entry *entry = (ACL_Entry *)l->data;
+            printf("Client: %s, File: %s, Read: %d, Write: %d\n",
+                   entry->client_id, entry->file_name, 
+                   entry->read_permission, entry->write_permission);
+        }
+    }
 }
 
 FileSemaphore *get_file_semaphore(const char *file_name, unsigned int initial_value) {
@@ -107,6 +161,51 @@ int check_file_access(const char* filename) {
         return 0;
     }
     return 1;
+}
+
+void cleanup_acl() {
+    GHashTableIter iter;
+    gpointer key, value;
+    g_hash_table_iter_init(&iter, acl_map);
+    while (g_hash_table_iter_next(&iter, &key, &value)) {
+        GSList *entries = (GSList *)value;
+        g_slist_free_full(entries, free);
+    }
+    g_hash_table_destroy(acl_map);
+}
+// Add debug prints to check_client_permission
+int check_client_permission(const char *client_id, const char *file_name, int operation) {
+    pthread_mutex_lock(&acl_lock);
+    
+    printf("Checking permission for client: %s, file: %s, operation: %d\n", 
+           client_id, file_name, operation);
+
+    // Get the list of entries for this client
+    GSList *entries = g_hash_table_lookup(acl_map, client_id);
+    
+    // Check each entry in the list
+    for (GSList *l = entries; l != NULL; l = l->next) {
+        ACL_Entry *entry = (ACL_Entry *)l->data;
+        printf("Comparing with ACL entry - client: %s, file: %s, read: %d, write: %d\n",
+               entry->client_id, entry->file_name, 
+               entry->read_permission, entry->write_permission);
+               
+        if (strcmp(entry->file_name, file_name) == 0) {
+            int permission = 0;
+            if (operation == 1) { // Read operation
+                permission = entry->read_permission;
+            } else if (operation == 2) { // Write operation
+                permission = entry->write_permission;
+            }
+            printf("Permission result: %d\n", permission);
+            pthread_mutex_unlock(&acl_lock);
+            return permission;
+        }
+    }
+
+    printf("No matching ACL entry found\n");
+    pthread_mutex_unlock(&acl_lock);
+    return 0;
 }
 
 char *null_string = "";
@@ -296,15 +395,21 @@ void file_compression(int client_socket) {
 }
 
 
-void filereader(int client_socket){
+void filereader(int client_socket, const char *client_id){
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s\n",filename);
 
-    if (!check_file_access(filename)) {
+    // if (!check_file_access(filename)) {
+    //     raise(SIGUSR1);
+    //     return;
+    // }
+    if (!check_client_permission(client_id, filename, 1)) {
+        send(client_socket, "Permission denied\n", 1024, 0);
         raise(SIGUSR1);
         return;
     }
+
 
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
@@ -339,16 +444,23 @@ void filereader(int client_socket){
     }
 }
 
-void filewriter(int client_socket) {
+void filewriter(int client_socket, const char *client_id) {
     char filename[1024];
     memset(filename, 0, sizeof(filename));
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s\n", filename);
     fflush(stdout);
-    if (!check_file_access(filename)) {
+
+    // if (!check_file_access(filename)) {
+    //     raise(SIGUSR1);
+    //     return;
+    // }
+    if (!check_client_permission(client_id, filename, 2)) {
+        send(client_socket, "Permission denied\n", 1024, 0);
         raise(SIGUSR1);
         return;
     }
+    
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -398,14 +510,21 @@ void filewriter(int client_socket) {
 }
 
 
-void file_deletion(int client_socket){
+void file_deletion(int client_socket, const char *client_id){
     char filename[1024];
     recv(client_socket,filename,1024,0);
     printf("File name received %s\n",filename);
-    if (!check_file_access(filename)) {
+    // if (!check_file_access(filename)) {
+    //     raise(SIGUSR1);
+    //     return;
+    // }
+
+    if (!check_client_permission(client_id, filename, 2)) {
+        send(client_socket, "Permission denied\n", 1024, 0);
         raise(SIGUSR1);
         return;
     }
+
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -425,14 +544,20 @@ void file_deletion(int client_socket){
     }
 }
 
-void file_renamer(int client_socket){
+void file_renamer(int client_socket, const char *client_id){
     char filename[1024];
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s\n",filename);
-    if (!check_file_access(filename)) {
+    // if (!check_file_access(filename)) {
+    //     raise(SIGUSR1);
+    //     return;
+    // }
+    if (!check_client_permission(client_id, filename, 2)) {
+        send(client_socket, "Permission denied\n", 1024, 0);
         raise(SIGUSR1);
         return;
     }
+    
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -455,7 +580,7 @@ void file_renamer(int client_socket){
     }
 }
 
-void metadata_display(int client_socket) {
+void metadata_display(int client_socket, const char *client_id) {
     char filename[1024];
     struct stat file_stat;
     memset(filename, 0, sizeof(filename));
@@ -463,7 +588,13 @@ void metadata_display(int client_socket) {
     recv(client_socket, filename, 1024, 0);
     printf("File name received for metadata display: %s\n", filename);
     fflush(stdout);
-    if (!check_file_access(filename)) {
+    // if (!check_file_access(filename)) {
+    //     raise(SIGUSR1);
+    //     return;
+    // }
+
+    if (!check_client_permission(client_id, filename, 1)) {
+        send(client_socket, "Permission denied\n", 1024, 0);
         raise(SIGUSR1);
         return;
     }
@@ -522,16 +653,23 @@ void metadata_display(int client_socket) {
     }
 }
 
-void file_copy(int client_socket){
+void file_copy(int client_socket, const char *client_id){
 
     char filename[1024];
     
     recv(client_socket, filename, 1024, 0);
     printf("File name received %s\n",filename);
-    if (!check_file_access(filename)) {
+    // if (!check_file_access(filename)) {
+    //     raise(SIGUSR1);
+    //     return;
+    // }
+
+    if (!check_client_permission(client_id, filename, 1)) {
+        send(client_socket, "Permission denied\n", 1024, 0);
         raise(SIGUSR1);
         return;
     }
+
     FileSemaphore *file_semaphore = get_file_semaphore(filename, 1);
     if(file_semaphore)
     {
@@ -573,6 +711,9 @@ void file_copy(int client_socket){
 void *client_handler(void *arg){
     int client_socket = *(int*)arg;
     char buffer[1024];
+    char client_id[50];
+    recv(client_socket, client_id, sizeof(client_id), 0);
+
     int choice;
     while (1)
     {
@@ -584,28 +725,28 @@ void *client_handler(void *arg){
         }
         printf("%d",choice);
         if(choice == 1){
-            filereader(client_socket);
+            filereader(client_socket,client_id);
 
         }
         if(choice == 2)
         {
-            filewriter(client_socket);
+            filewriter(client_socket, client_id);
         }
         if(choice == 3)
         {
-            file_deletion(client_socket);
+            file_deletion(client_socket, client_id);
         }
         if(choice == 4)
         {
-            file_renamer(client_socket);
+            file_renamer(client_socket, client_id);
         }
         if(choice == 5)
         {
-            file_copy(client_socket);
+            file_copy(client_socket, client_id);
         }
         if(choice == 6)
         {
-            metadata_display(client_socket);
+            metadata_display(client_socket, client_id);
         }
         if(choice == 7){
             file_compression(client_socket);
@@ -627,6 +768,7 @@ void *client_handler(void *arg){
 int main(){
     setup_signal_handling();
     initialize_semaphore_map();
+    load_acl("acl.txt");
     int server_socket;
     struct sockaddr_in server_address;
     socklen_t server_address_size = sizeof(server_address);

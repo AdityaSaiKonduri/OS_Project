@@ -63,6 +63,38 @@ $ msgtest
 ```
 ---
 
+### Terminal Output Images
+
+1. **Make Clean**
+
+![ALT TEXT](images/makeclean.png)
+
+2. **Make**
+
+![ALT TEXT](images/make1.png)
+![ALT TEXT](images/make2.png)
+
+3. **Make Qemu**
+
+![ALT TEXT](images/makeqemu.png)
+
+4. **CPS**
+
+![ALT TEXT](images/cps.png)
+
+5. **SIGNAL**
+
+![ALT TEXT](images/signal.png)
+
+6. **THREAD_TEST**
+
+![ALT TEXT](images/thread_create.png)
+
+7. **MSGGET**
+
+![ALT TEXT](images/msgget.png)
+
+
 ## Question 2: Multi-Threaded File Management System  
 **Topics Implemented:** `pthread`, `synchronization`, `signals`,`socket programming`
 
@@ -98,6 +130,17 @@ In this project, we aim to implement a file management system where multiple cli
 
 10. **File Wise Restriction**
    Each of the file has its own read and write lock (`semaphore`) therefore enabling the scenario where one client is writing on say file1.txt the rest of the files are still available to perform operations on for rest of the clients
+
+11. **Access Control List (File restrictions for select users)**
+   There is a acl.txt (access control list) where there is client id, file_name, read_access and write_access which is being reused for other functions with similar semaphore accesses. The clients will be asked to enter their client id and then the client id is matched with the acl.txt and upon requesting the file (only if the file exists in acl.txt and if permission is true (read/write)) the operation will be executed from the server side.
+
+ ```
+   client1 vk.txt 1 0
+   client1 file3.txt 0 1
+   client2 file3.txt 1 1
+   client2 file4.txt 1 0
+ ```
+ The admin has the freedom to edit the acl.txt (the files not mentioned in acl.txt including itself and log.txt and any other files are by default read-0 and write-0)
 
 ### Methodology:
 1. **Server and Client Setup**  
@@ -185,3 +228,9 @@ In this project, we aim to implement a file management system where multiple cli
 
 ![ALT TEXT](images/compression&decompression.png)
 ![ALT TEXT](images/filestructure_comp_decomp.png)
+
+8. **ACL Operations and Output**
+
+![ALT TEXT](images/filereadaccessed.png)
+![ALT TEXT](images/filereaddeny.png)
+![ALT TEXT](images/filewritedeny.png)

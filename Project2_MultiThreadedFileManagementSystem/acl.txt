@@ -1,0 +1,4 @@
+client1 vk.txt 1 0
+client1 file3.txt 0 1
+client2 file3.txt 1 1
+client2 file4.txt 1 0
